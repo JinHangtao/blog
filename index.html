@@ -362,7 +362,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-img img{display:block;max-width:72vw;max-height:87vh;object-fit:contain;box-shadow:0 40px 120px rgba(0,0,0,.95);}
 /* 淡入 keyframe，用 animation 而非 transition，不受 src 切換干擾 */
 @keyframes lbFadeIn{from{opacity:0;}to{opacity:1;}}
-.lb-img img.lb-fadein{animation:lbFadeIn .6s cubic-bezier(.4,0,.2,1) forwards;}
+.lb-img img.lb-fadein{animation:lbFadeIn .6s cubic-bezier(.8,0,.2,1) forwards;}
 .lb-spinner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .18s;}
 .lb-spinner.vis{opacity:1;}
 .lb-spinner::after{content:'';width:20px;height:20px;border:1.5px solid rgba(196,154,82,.2);border-top-color:rgba(196,154,82,.75);border-radius:50%;animation:lbspin .7s linear infinite;}
