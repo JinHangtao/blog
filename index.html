@@ -427,9 +427,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   color:var(--fg-dd);font-size:.55rem;transition:border-color .25s,color .25s,transform .3s;
 }
 .mob-profile.open .mob-toggle{border-color:var(--gold-d);color:var(--gold);transform:rotate(180deg)}
-.mob-details{max-height:0;overflow:hidden;transition:max-height .38s cubic-bezier(.4,0,.2,1)}
-.mob-profile.open .mob-details{max-height:300px}
+.mob-details{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s cubic-bezier(.4,0,.2,1)}
+.mob-profile.open .mob-details{grid-template-rows:1fr}
 .mob-details-inner{
+  overflow:hidden;
+  min-height:0;
   padding:0 16px 16px;
   display:grid;grid-template-columns:1fr 1fr;gap:8px;
 }
