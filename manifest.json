@@ -1,0 +1,23 @@
+{
+  "name": "Jin Hangtao",
+  "short_name": "Jin HT",
+  "description": "Jin Hangtao · Artist Portfolio · Ages 13–18",
+  "start_url": "/blog/",
+  "scope": "/blog/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0c0b",
+  "theme_color": "#0d0c0b",
+  "icons": [
+    {
+      "src": "images/頭像呢.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "images/頭像呢.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
