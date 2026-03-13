@@ -1808,12 +1808,13 @@ document.addEventListener('keydown', function(e){
     wrap.style.transform='translateY(0)';
   },{passive:true});
 
-  // Pinch to zoom
+ // Pinch to zoom + pan
 (function(){
   var lbImg = document.getElementById('lbImg');
   var initDist = 0, initScale = 1;
   if(!window._lbScale) window._lbScale = 1;
   var lbScale = 1;
+  var panX = 0, panY = 0, initPanX = 0, initPanY = 0, panStartX = 0, panStartY = 0;
 
   function getDist(t){
     var dx = t[0].clientX - t[1].clientX;
@@ -1821,10 +1822,20 @@ document.addEventListener('keydown', function(e){
     return Math.sqrt(dx*dx + dy*dy);
   }
 
+  function applyTransform(transition){
+    lbImg.style.transition = transition ? 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)' : 'none';
+    lbImg.style.transform = 'scale(' + lbScale + ') translate(' + panX + 'px,' + panY + 'px)';
+  }
+
   lb.addEventListener('touchstart', function(e){
     if(e.touches.length === 2){
       initDist = getDist(e.touches);
       initScale = lbScale;
+    } else if(e.touches.length === 1 && lbScale > 1.05){
+      panStartX = e.touches[0].clientX;
+      panStartY = e.touches[0].clientY;
+      initPanX = panX;
+      initPanY = panY;
     }
   }, {passive:true});
 
@@ -1836,16 +1847,20 @@ document.addEventListener('keydown', function(e){
       var originX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       var originY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       lbImg.style.transformOrigin = originX + 'px ' + originY + 'px';
-      lbImg.style.transition = 'none';
-      lbImg.style.transform = 'scale(' + lbScale + ')';
+      applyTransform(false);
+    } else if(e.touches.length === 1 && lbScale > 1.05){
+      e.preventDefault();
+      panX = initPanX + (e.touches[0].clientX - panStartX) / lbScale;
+      panY = initPanY + (e.touches[0].clientY - panStartY) / lbScale;
+      applyTransform(false);
     }
   }, {passive:false});
 
   lb.addEventListener('touchend', function(e){
     if(e.touches.length < 2 && lbScale < 1.15){
       lbScale = window._lbScale = 1;
-      lbImg.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
-      lbImg.style.transform = 'scale(1)';
+      panX = 0; panY = 0;
+      applyTransform(true);
     }
   }, {passive:true});
 })();
