@@ -10,14 +10,9 @@
   "theme_color": "#0d0c0b",
   "icons": [
     {
-      "src": "images/頭像呢.jpg",
+      "src": "images/avatar.png",
       "sizes": "128x128",
-      "type": "image/jpeg"
-    },
-    {
-      "src": "images/頭像呢.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg"
+      "type": "image/png"
     }
   ]
 }
