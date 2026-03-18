@@ -6,7 +6,7 @@ Created in 2026, age 19 — a space to share everyday thoughts and preserve the 
 
 ---
 
-**Blog** → [jinhangtao.com](https://jinhangtao.github.io/blog) **Other Blog**→ [jinhangtao.com](https://jinhangtao.github.io/reliquary)
+**Blog** → [jinhangtao.com](https://jinhangtao.github.io/blog)   **Other Blog**→ [jinhangtao.com](https://jinhangtao.github.io/reliquary)
 
 ---
 
