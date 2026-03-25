@@ -1,0 +1,82 @@
+[
+  {
+    "id": "addiction",
+    "num": "01",
+    "date": "2026 · 3 · 13",
+    "title": "成瘾性和<em>意志</em>关系",
+    "subtitle": "Psychology · Brain Science · 脑科学",
+    "commentId": "postX",
+    "nextId": "opensource",
+    "body": [
+      "意志不是能解决成瘾的方法，在小时候沉迷电子游戏甚至熬夜的时候我觉得是意志力自控力的问题，后来在阅读脑科学的视频研究后发现有一个小东西，叫<a href=\"https://zh.wikipedia.org/wiki/伏隔核\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">伏隔核</a>，只有花生米那么大，却几乎主导了所有让你停不下来的行为。",
+      "它释放的多巴胺不是快乐本身，是对快乐的预期。越得不到，越保留希望和兴奋，这就是为什么刷完一个视频会马上刷下一个，不是上一个有多好，是因为下一个可能更好。",
+      "成瘾不是我们不够努力，是大脑的回路被训练到了我们感觉会后悔和不可控制的方向了。意志力在这里几乎是以卵击石。",
+      "<section-break>换一个喂法</section-break>",
+      "画画、运动、创作，同样能激活这个地方，大脑不会先判断这件事对你也就是意识体来说是不是好事，它更容易被当下的感觉驱动。所以与其跟自己的脑子硬刚，不如换一个东西喂它。"
+    ]
+  },
+  {
+    "id": "opensource",
+    "num": "02",
+    "date": "2026 · 2 · 15",
+    "title": "开源<em>模型</em>",
+    "subtitle": "AI · ComfyUI · Stable Diffusion",
+    "commentId": "post1",
+    "nextId": null,
+    "body": [
+      "ComfyUI 太推荐这个 AI 生成模型，用得比较多 <a href=\"https://civitai.com/models/133005/juggernaut-xl\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Juggernaut XL</a>，下载之后放入 checkpoints 这个文件夹里就好了。",
+      "路径在 C:\\用户\\<你的用户名>\\文档\\ComfyUI\\models 里面。"
+    ]
+  },
+  {
+    "id": "japan",
+    "num": "03",
+    "date": "2026 · 2 · 7",
+    "title": "japan，第一次<em>出國</em>",
+    "subtitle": "Travel · Memory",
+    "commentId": "post2",
+    "nextId": null,
+    "body": [
+      "我想起了第一次出國，在2019年疫情之前去的，還是挺感慨的。",
+      "<video controls poster=\"images/日本视频封面.jpg\" style=\"width:100%;border-radius:10px;margin:14px 0;max-height:70vh\"><source src=\"images/日本.mp4\" type=\"video/mp4\"></video>"
+    ]
+  },
+  {
+    "id": "cat",
+    "num": "04",
+    "date": "2026 · 2 · 7",
+    "title": "貓<em>貓</em>",
+    "subtitle": "日常",
+    "commentId": "post3",
+    "nextId": null,
+    "body": [
+      "發現一個豬咪🐖，但是我手上什麽都沒有，就拍了個照片挺無聊。",
+      "<img src=\"images/貓貓.jpg\" style=\"width:100%;border-radius:10px;margin:14px 0;\">"
+    ]
+  },
+  {
+    "id": "xmas",
+    "num": "05",
+    "date": "2025 · Winter",
+    "title": "聖誕<em>樹</em>",
+    "subtitle": "日常",
+    "commentId": "post4",
+    "nextId": null,
+    "body": [
+      "可愛的樹樹🎄，聖誕快樂🦌",
+      "<img src=\"images/樹木.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">"
+    ]
+  },
+  {
+    "id": "start",
+    "num": "06",
+    "date": "2025 · Winter",
+    "title": "我開創了我的<em>blog</em>",
+    "subtitle": "日常",
+    "commentId": "post5",
+    "nextId": null,
+    "body": [
+      "我建立一個blog網站内容還在更新嘿嘿，來玩兒（有意思）"
+    ]
+  }
+]
