@@ -46,7 +46,7 @@ DECLARE
     '生殖器','睾丸','精液','射精','自慰','手淫',
     '做爱','性交','口交','肛交','3p','援交',
     '鷄巴','雞巴','陰道','陰莖','陰蒂','陰戶',
-    '做愛','援交','半套','小姐姐','小妹妹','小妹','阿妹','小姐',
+    '做愛','援交','小姐姐','小妹妹','小妹','阿妹','小姐',
     '卖淫','妓女','嫖娼','妓院','皮条客','鸡女','站街','快餐','全套','特殊服务','上门服务','会所',
     '賣淫','皮條客','雞女','特殊服務','上門服務','會所',
     'escort','prostitute','hooker',
@@ -67,7 +67,6 @@ DECLARE
   client_ip TEXT;
   forwarded TEXT;
 BEGIN
-  -- 過濾違禁詞（去除所有非字母/漢字字符後比對）
   combined := lower(regexp_replace(NEW.name || NEW.message, '[^a-zA-Z\u4e00-\u9fff]', '', 'g'));
   FOREACH w IN ARRAY banned LOOP
     IF combined LIKE '%' || lower(w) || '%' THEN
@@ -75,7 +74,6 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 取 IP（x-forwarded-for 可能有多個，取第一個）
   BEGIN
     forwarded := current_setting('request.headers', true)::json->>'x-forwarded-for';
   EXCEPTION WHEN OTHERS THEN
@@ -86,7 +84,6 @@ BEGIN
     client_ip := trim(split_part(forwarded, ',', 1));
   END IF;
 
-  -- Rate limit：5分鐘內同一 IP 最多 5 條
   IF client_ip IS NOT NULL AND client_ip <> '' THEN
     SELECT COUNT(*) INTO recent_count
     FROM public.comment_rate_limits
@@ -120,7 +117,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ── 自動排程：每小時清一次（需要 pg_cron extension）──
--- 先開啟 pg_cron（在 Supabase Dashboard > Database > Extensions 搜尋 pg_cron 開啟）
--- 然後執行下面這行：
+-- ════════════════════════════════
+-- ── LIKES 表（新增）──
+-- ════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.likes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(post_id, session_id)
+);
+
+ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anyone can read likes" ON public.likes;
+DROP POLICY IF EXISTS "anyone can insert likes" ON public.likes;
+DROP POLICY IF EXISTS "anyone can delete own like" ON public.likes;
+
+CREATE POLICY "anyone can read likes" ON public.likes
+  FOR SELECT USING (true);
+
+CREATE POLICY "anyone can insert likes" ON public.likes
+  FOR INSERT WITH CHECK (
+    length(post_id) > 0 AND length(session_id) > 0
+  );
+
+CREATE POLICY "anyone can delete own like" ON public.likes
+  FOR DELETE USING (true);
+
+-- ── 自動排程（需先在 Extensions 開啟 pg_cron）──
 SELECT cron.schedule('clean-rate-limits', '0 * * * *', 'SELECT clean_rate_limits();');
