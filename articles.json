@@ -24,7 +24,7 @@
     "commentId": "post1",
     "nextId": null,
     "body": [
-      "ComfyUI 太推荐这个 AI 生成模型，用得比较多 <a href=\"https://civitai.com/models/133005/juggernaut-xl\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Juggernaut XL</a>，下载之后放入 checkpoints 这个文件夹里就好了。",
+      "ComfyUI 太推荐这个 AI 生成模型，用得比较多 <a href=\"https://civitai.com/models/133005/juggernaut-xl\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Juggernaut XL</a>，下载之后放入 checkpoints 这个文件夹里就好了",
       "路径在 C:\\用户\\<你的用户名>\\文档\\ComfyUI\\models 里面。"
     ]
   },
