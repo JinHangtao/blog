@@ -1,11 +1,9 @@
 <div align="center">
 
-<!-- 打字动画 SVG — readme-typing-svg 开源项目 -->
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Playfair+Display&size=28&duration=3000&pause=1000&color=C49A52&center=true&vCenter=true&width=600&lines=Jin+Hangtao+%C2%B7+%E9%87%91%E8%88%AA%E6%BB%94;Artist+%C2%B7+3D+%C2%B7+AI+%C2%B7+Photography;Born+2006+%C2%B7+Age+19)](https://git.io/typing-svg)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Playfair+Display&size=28&duration=3000&pause=1000&color=C49A52&center=true&vCenter=true&width=600&lines=Jin+Hangtao;Evidence+of+who+I+was+before+eighteen;A+place+to+keep+what+almost+disappeared)](https://git.io/typing-svg)
 
 ![Blog](images/readme_imagine.png)
 
-<!-- 访客计数 -->
 ![Visitor Count](https://komarev.com/ghpvc/?username=JinHangtao&color=c49a52&style=for-the-badge&label=VISITORS)
 
 </div>
