@@ -2093,8 +2093,10 @@ function rippleThen(e,el,id){
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowfullscreen>
       </iframe>
-      <div id="iframeOverlay" style="position:absolute;inset:0;z-index:1;" ontouchstart="this.style.pointerEvents='none'" ontouchend="setTimeout(function(){var o=document.getElementById('iframeOverlay');if(o)o.style.pointerEvents='auto'},150)"></div>
-    </div>
+     <div id="iframeOverlay" style="position:absolute;inset:0;z-index:1;pointer-events:none;" 
+  ontouchstart="this.style.pointerEvents='none'" 
+  ontouchend="setTimeout(function(){var o=document.getElementById('iframeOverlay');if(o)o.style.pointerEvents='none'},150)">
+</div>
     <p class="blog-body blog-body-collapsible">《Dreaming Inside an Elastic Space》是一個互動式影片作品，透過「彈性空間」的概念，探索憂鬱與自殺意念——也就是人的內在心理狀態如何實際改變周圍的世界。
 
 作品沒有戲劇化或誇張的表現，而是讓觀者親身進入這些情緒狀態。你的每個選擇都會影響空間：物體變得更重或更輕，房間收縮、擴張、扭曲，聲音也模糊了思想與環境的界線。
