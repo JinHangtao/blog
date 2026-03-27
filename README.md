@@ -1,6 +1,6 @@
 <div align="center">
 
-# Jin Hangtao · 金航滔
+# Jin Hangtao
 
 ![Blog](images/readme_imagine.png)
 
