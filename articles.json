@@ -1,30 +1,28 @@
 [
-
-{
-  "id": "Atelier-Mise",
-  "num": "07",
-  "date": "2026 · 6 · 6",
-  "title": "独立开发 <em>5</em> 个月，我造了一个无限画布",
-  "subtitle": "Dev · Design · Tools",
-  "commentId": "post6",
-  "nextId": null,
-  "body": [
-    "从构思到现在刚好五个月。我不确定自己中途放弃过多少次，但每次回来都把上次的东西推掉重写。这个过程很难用「有趣」来形容，更接近一种痛苦。",
-    "这个应用叫 <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Atelier Mise</a>，一个独立画布编辑器。在没有边界的画布上自由思考，然后直接把结果导出来。",
-    "<img src=\"images/my app02.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
-    "<section-break>没有一个功能在建造过程是顺的，核心功能全部自研确保可控结构</section-break>",
-    "很多 bug 花了好几天，查到最后发现是自己两周前挖的坑。有些功能设计了三四个版本，最后用的是最早那个最简单的。坐在那里看着屏幕，真的会怀疑自己当初为什么要做这件事。",
-    "<img src=\"images/my app03.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
-    "但停不下来。因为我找不到一个工具是我真正想用的那种——思考过程和最终结果能在同一个地方完成，不用来回倒腾。自己造是一个路子。",
-    "<img src=\"images/my app.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
-    "<section-break>现在的样子</section-break>",
-    "无限画布、自由穿页、画线连接、图片编辑、排版导出只截取页面内容作为HTML，PPT，WORD。",
-    "有Online和Offline。在线版：<a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">atelier-mise.vercel.app</a>",
-    "<img src=\"images/my app01.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
-    "五个月，我想完成。就后脑勺到现在还是紧的，打心底认为这是给20岁生日的礼物了。"
-  ]
-}
-  
+  {
+    "id": "Atelier-Mise",
+    "num": "07",
+    "date": "2026 · 6 · 6",
+    "title": "独立开发 <em>5</em> 个月，我造了一个无限画布",
+    "subtitle": "Dev · Design · Tools",
+    "commentId": "post6",
+    "nextId": null,
+    "body": [
+      "从构思到现在刚好五个月。我不确定自己中途放弃过多少次，但每次回来都把上次的东西推掉重写。这个过程很难用「有趣」来形容，更接近一种痛苦。",
+      "这个应用叫 <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Atelier Mise</a>，一个独立画布编辑器。在没有边界的画布上自由思考，然后直接把结果导出来。",
+      "<img src=\"images/my app02.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
+      "<section-break>没有一个功能在建造过程是顺的，核心功能全部自研确保可控结构</section-break>",
+      "很多 bug 花了好几天，查到最后发现是自己两周前挖的坑。有些功能设计了三四个版本，最后用的是最早那个最简单的。坐在那里看着屏幕，真的会怀疑自己当初为什么要做这件事。",
+      "<img src=\"images/my app03.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
+      "但停不下来。因为我找不到一个工具是我真正想用的那种——思考过程和最终结果能在同一个地方完成，不用来回倒腾。自己造是一个路子。",
+      "<img src=\"images/my app.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
+      "<section-break>现在的样子</section-break>",
+      "无限画布、自由穿页、画线连接、图片编辑、排版导出只截取页面内容作为HTML，PPT，WORD。",
+      "有Online和Offline。在线版：<a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">atelier-mise.vercel.app</a>",
+      "<img src=\"images/my app01.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
+      "五个月，我想完成。就后脑勺到现在还是紧的，打心底认为这是给20岁生日的礼物了。"
+    ]
+  },
   {
     "id": "addiction",
     "num": "01",
