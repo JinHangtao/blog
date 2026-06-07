@@ -8,7 +8,7 @@
     "commentId": "post6",
     "nextId": null,
     "body": [
-      "从构思到现在刚好五个月。我不确定自己中途放弃过多少次，但每次回来都把上次的东西推掉重写。这个过程很难用「有趣」来形容，更接近一种痛苦。",
+      "从构思到现在刚好五个月。我不确定自己中途放弃过多少次，但每次回来都把上次的东西推掉重写。这个过程很难用「有趣」来形容，更接近一种痛。",
       "这个应用叫 <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Atelier Mise</a>，一个独立画布编辑器。在没有边界的画布上自由思考，然后直接把结果导出来。",
       "<img src=\"images/my app02.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
       "<section-break>核心功能全部自研确保可控结构</section-break>",
@@ -17,7 +17,7 @@
       "但停不下来。因为我找不到一个工具是我真正想用的那种——思考过程和最终结果能在同一个地方完成，不用来回倒腾。自己造是一个路子。",
       "<img src=\"images/my app.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
       "<section-break>现在的样子</section-break>",
-      "无限画布、自由穿页、画线连接、图片编辑、排版导出只截取页面内容作为HTML，PPT，WORD。",
+      "自由画布、自由穿页、画线连接、图片编辑、排版导出只截取页面内容作为HTML，PPT，WORD。",
       "有Online和Offline。在线版：<a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">atelier-mise.vercel.app</a>",
       "<img src=\"images/my app01.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
       "五个月，我想完成。这是给自己20岁生日礼物了。"
