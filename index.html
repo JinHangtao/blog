@@ -1525,12 +1525,9 @@ button, a, input, label, [onclick], video {
 .art-send-btn{ transition:background .2s,border-color .2s,color .2s,transform .2s; cursor:pointer !important; pointer-events:all !important; }
 .art-send-btn.sent{ border-color:rgba(196,154,82,.6) !important; color:var(--gold) !important; transform:scale(1.06); }
 
-/* ── 评论输入框：阅读到底部时贴底悬浮，盖住下方评论 ── */
+/* ── 评论输入框：常驻 fixed 贴底，平时隐藏不可交互；阅读到底部时平滑淡入显示 ── */
 .art-comment-row{
-  transition:none;
-}
-.art-comment-row.docked{
-  position:absolute;
+  position:fixed;
   left:0; right:0; bottom:0;
   margin:0;
   padding:14px var(--pad);
@@ -1541,12 +1538,19 @@ button, a, input, label, [onclick], video {
   border-radius:0;
   box-shadow:0 -8px 24px rgba(0,0,0,.35);
   z-index:50;
+  opacity:0;
+  transform:translateY(100%);
+  transition:opacity .32s ease, transform .32s ease;
+  pointer-events:none;
+}
+.art-comment-row.docked{
+  opacity:1;
+  transform:translateY(0);
+  pointer-events:auto;
 }
 @media(max-width:768px){
-  .art-comment-row.docked{ padding:12px 16px; }
+  .art-comment-row{ padding:12px 16px; }
 }
-/* docked 时给评论列表留出底部安全间距，避免被输入框完全遮住最后一条 */
-.art-comments.has-docked-spacer{ padding-bottom:64px; }
 
 /* ── 列表页 Read Full 按钮 ── */
 .blog-open-btn{
@@ -4709,10 +4713,8 @@ function doCopy(btn){
 
     var commentRow = artContent.querySelector('.art-comment-row');
     if(commentRow){
-      var commentsWrap = commentRow.closest('.art-comments');
       var shouldDock = pct >= DOCK_THRESHOLD;
       commentRow.classList.toggle('docked', shouldDock);
-      if(commentsWrap) commentsWrap.classList.toggle('has-docked-spacer', shouldDock);
     }
   }, {passive:true});
 
