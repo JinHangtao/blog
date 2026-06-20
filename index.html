@@ -4696,6 +4696,10 @@ function doCopy(btn){
     if(!loaded){ pending = id; return; }
     if(!ARTICLES[id]) return;
 
+    // 重置上一篇文章可能残留的贴底状态，避免短暂闪烁
+    var prevCommentRow = document.getElementById('artCommentRow');
+    if(prevCommentRow) prevCommentRow.classList.remove('docked');
+
     buildContent(id);
     artScroll.scrollTop = 0;
     artProgress.style.width = '0%';
@@ -4714,6 +4718,8 @@ function doCopy(btn){
       artContent.querySelectorAll('.art-reveal').forEach(function(el, i){
         setTimeout(function(){ el.classList.add('in'); }, i * 55);
       });
+      // 内容动画播完、布局稳定后，检查文章是否短到没有滚动空间
+      checkAutoExpandComment();
     }, 370);
   };
 
@@ -4751,6 +4757,28 @@ function doCopy(btn){
       commentRow.classList.toggle('docked', shouldDock);
     }
   }, {passive:true});
+
+  // 内容太短、没有滚动空间（无法触发 scroll 事件）时，自动弹起评论输入框
+  function checkAutoExpandComment(){
+    var commentRow = document.getElementById('artCommentRow');
+    if(!commentRow || commentRow.style.display === 'none') return;
+    var max = artScroll.scrollHeight - artScroll.clientHeight;
+    if(max <= 4){ // 几乎没有可滚动空间（留 4px 容差）
+      artProgress.style.width = '100%';
+      commentRow.classList.add('docked');
+    }
+  }
+  // 文章打开动画结束后检查一次（此时大部分内容已渲染）
+  // 字体加载完成后再检查一次（字体切换可能改变文字行高/总高度）
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(function(){ setTimeout(checkAutoExpandComment, 50); });
+  }
+  // 图片懒加载完成后高度可能变化，监听 artContent 尺寸变化兜底
+  if(window.ResizeObserver){
+    var artRO = new ResizeObserver(function(){ checkAutoExpandComment(); });
+    artRO.observe(artContent);
+  }
+  window.addEventListener('resize', checkAutoExpandComment);
 
   // 切换/关闭文章时重置贴底状态（避免下一篇文章残留 docked 样式）
   document.addEventListener('articleClose', function(){
