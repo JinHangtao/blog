@@ -4809,6 +4809,12 @@ function doCopy(btn){
     artProgress.style.width = Math.min(pct,100).toFixed(1) + '%';
     artTitleBar.classList.toggle('vis', artScroll.scrollTop > 80);
 
+    // 文章已关闭时直接跳过 —— 移动端惯性滚动（inertia scroll）会在
+    // closeArticle() 之后还继续触发若干个 scroll 事件，若不加这道守卫，
+    // 这里仍会把已经隐藏的留言框重新 dock 出来，造成关闭后留言框
+    // 隐形挂在页面上、且因 pointer-events:auto 挡住下面元素的点击。
+    if(!overlay.classList.contains('art-on')) return;
+
     var commentRow = document.getElementById('artCommentRow');
     if(commentRow && commentRow.dataset.hasComments === '1'){
       var isDocked = commentRow.classList.contains('docked');
