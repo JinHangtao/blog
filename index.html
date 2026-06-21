@@ -438,6 +438,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   background-clip:text;
   -webkit-text-fill-color:transparent;
   color:rgba(0,0,0,0.01);
+  will-change:background-position;
   transition:background-position .58s cubic-bezier(.22,.68,0,1.2),
              transform .28s cubic-bezier(.4,0,.2,1),
              letter-spacing .28s cubic-bezier(.4,0,.2,1),
@@ -1615,6 +1616,15 @@ function rippleThen(e,el,id){
       newTab2.style.transition = '';
       newTab2.style.backgroundPosition = '';
     }
+    if(oldTab2 && oldTab2 !== newTab2){
+      (function(tabEl){
+        setTimeout(function(){
+          tabEl.style.webkitTextFillColor = 'transparent';
+          tabEl.style.webkitBackgroundClip = 'text';
+          void tabEl.offsetWidth;
+        }, 600);
+      })(oldTab2);
+    }
 
     var activeTab=document.querySelector('.tab.on');
     moveIndicator(activeTab);
@@ -2569,6 +2579,18 @@ function show(id,el){
     void newTab.offsetWidth;
     newTab.style.transition = '';
     newTab.style.backgroundPosition = '';
+  }
+  // old tab leaving: after transition ends, force-reapply background-clip:text
+  // to fix a rendering issue where some browsers drop the gradient clip and
+  // show the fallback fill color (white flash) after a background-position animation
+  if(oldTab && oldTab !== newTab){
+    (function(tabEl){
+      setTimeout(function(){
+        tabEl.style.webkitTextFillColor = 'transparent';
+        tabEl.style.webkitBackgroundClip = 'text';
+        void tabEl.offsetWidth;
+      }, 600);
+    })(oldTab);
   }
 
   moveIndicator(el);
@@ -3652,6 +3674,17 @@ function triggerStmtPoem(){
       void newTab.offsetWidth;
       newTab.style.transition = '';
       newTab.style.backgroundPosition = '';
+    }
+    // 旧 tab 离场：transition 结束后强制重新应用一次 background-clip:text 渲染，
+    // 修复部分浏览器在 background-position 动画后裁切贴图丢失、文字露白的问题
+    if(oldTab && oldTab !== newTab){
+      (function(tabEl){
+        setTimeout(function(){
+          tabEl.style.webkitTextFillColor = 'transparent';
+          tabEl.style.webkitBackgroundClip = 'text';
+          void tabEl.offsetWidth;
+        }, 600);
+      })(oldTab);
     }
 
     // 移動指示條 + 自動讓 topbar 滾到當前 tab 可見
