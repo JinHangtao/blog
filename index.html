@@ -1585,6 +1585,43 @@ button, a, input, label, [onclick], video {
 .blog-open-btn:active{ transform:scale(.97); opacity:.8; }
 .blog-open-btn .btn-arrow{ display:inline-flex; opacity:.7; transition:transform .2s,opacity .2s; }
 .blog-open-btn:hover .btn-arrow{ transform:translate(2px,-2px); opacity:1; }
+
+/* ── 留言提示 Toast ── */
+#jh-toast-wrap{
+  position:fixed; left:50%; top:18px; transform:translateX(-50%);
+  z-index:10000; display:flex; flex-direction:column; gap:10px;
+  align-items:center; pointer-events:none; width:100%; padding:0 16px;
+}
+.jh-toast{
+  pointer-events:auto;
+  display:flex; align-items:center; gap:10px;
+  max-width:420px; width:max-content;
+  background:linear-gradient(180deg,rgba(22,21,19,.96),rgba(17,16,15,.96));
+  border:1px solid var(--gold-d);
+  border-radius:11px;
+  padding:13px 20px;
+  font-family:'Jost',sans-serif; font-weight:300; font-size:.72rem;
+  letter-spacing:.02em; color:var(--fg);
+  box-shadow:0 12px 32px -8px rgba(0,0,0,.55), 0 0 0 1px rgba(196,154,82,.06);
+  backdrop-filter:blur(10px);
+  opacity:0; transform:translateY(-14px) scale(.96);
+  transition:opacity .32s cubic-bezier(.22,1,.36,1), transform .32s cubic-bezier(.22,1,.36,1);
+}
+.jh-toast.show{ opacity:1; transform:translateY(0) scale(1); }
+.jh-toast.hide{ opacity:0; transform:translateY(-10px) scale(.97); }
+.jh-toast .jh-toast-ic{
+  flex-shrink:0; width:20px; height:20px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.66rem; color:var(--bg);
+  background:var(--gold);
+}
+.jh-toast.warn .jh-toast-ic{ background:var(--gold); }
+.jh-toast.error .jh-toast-ic{ background:#b5564f; }
+.jh-toast .jh-toast-msg{ line-height:1.5; }
+.jh-toast .jh-toast-msg b{ color:var(--gold-p); font-weight:500; }
+@media(max-width:520px){
+  .jh-toast{ font-size:.68rem; padding:12px 16px; }
+}
 </style>
 <script>
 function rippleThen(e,el,id){
@@ -1665,6 +1702,7 @@ function rippleThen(e,el,id){
 <body class="is-loading">
 <canvas id="starsBg"></canvas>
 <div id="cur"></div><div id="cur-r"></div>
+<div id="jh-toast-wrap"></div>
 
 <div class="shell">
 
@@ -3359,6 +3397,29 @@ function loadC(pid, listElId, compact, onViewAll){
   });
 }
 
+// ── 自定义提示弹窗（替代浏览器默认 alert）──
+function showToast(msg, type){
+  var wrap = document.getElementById('jh-toast-wrap');
+  if(!wrap) return;
+  var icon = type==='error' ? '!' : (type==='warn' ? '⏱' : '✓');
+  var t = document.createElement('div');
+  t.className = 'jh-toast' + (type ? ' '+type : '');
+  t.innerHTML = '<span class="jh-toast-ic">'+icon+'</span><span class="jh-toast-msg">'+msg+'</span>';
+  wrap.appendChild(t);
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ t.classList.add('show'); });
+  });
+  var dismissed=false;
+  function dismiss(){
+    if(dismissed) return; dismissed=true;
+    t.classList.remove('show');
+    t.classList.add('hide');
+    setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 340);
+  }
+  t.addEventListener('click', dismiss);
+  setTimeout(dismiss, 3200);
+}
+
 var lastSubmit={};
 // ── 違禁詞過濾 ──
 var BANNED_WORDS=[
@@ -3376,7 +3437,7 @@ function submitC(pid, fromArtRow, btnRef){
   var now=Date.now();
   if(lastSubmit[pid]&&now-lastSubmit[pid]<15000){
     var sec=Math.ceil((15000-(now-lastSubmit[pid]))/1000);
-    alert('15秒后才可以發下一條評論哦，還需等 '+sec+' 秒 😊');
+    showToast('15秒后才可以發下一條評論哦，還需等 <b>'+sec+'</b> 秒 😊', 'warn');
     return;
   }
   var nameEl, msgEl, btn;
@@ -3410,7 +3471,7 @@ function submitC(pid, fromArtRow, btnRef){
     return;
   }
   if(containsBanned(name)||containsBanned(msg)){
-    alert('評論包含不當內容，請修改後重新發送 🙏');
+    showToast('評論包含不當內容，請修改後重新發送 🙏', 'error');
     return;
   }
   var originalBtnHtml = btn ? btn.innerHTML : null;
@@ -3443,9 +3504,9 @@ function submitC(pid, fromArtRow, btnRef){
         loadC(pid, 'art-cl-' + pid, false);
       }
     } else {
-      r.text().then(function(t){alert('發送失敗: '+r.status+' '+t);});
+      r.text().then(function(t){showToast('發送失敗: '+r.status+' '+t, 'error');});
     }
-  }).catch(function(e){alert('網絡錯誤: '+e);
+  }).catch(function(e){showToast('網絡錯誤: '+e, 'error');
   }).finally(function(){if(btn&&btn.textContent==='...'){btn.textContent='发送';btn.disabled=false;}});
 }
 
