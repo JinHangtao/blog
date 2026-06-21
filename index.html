@@ -1530,7 +1530,11 @@ button, a, input, label, [onclick], video {
 .art-send-btn{ transition:background .2s,border-color .2s,color .2s,transform .2s; cursor:pointer !important; pointer-events:all !important; }
 .art-send-btn.sent{ border-color:rgba(196,154,82,.6) !important; color:var(--gold) !important; transform:scale(1.06); }
 
-/* ── 评论输入框：唯一一份，绝对定位贴合 articleOverlay 底部；平时彻底隐身（visibility:hidden，不占点击空间），滚动到底部时淡入显示 ── */
+/* ── 评论输入框：唯一一份，绝对定位贴合 articleOverlay 底部；平时彻底隐身，滚动到底部时淡入显示 ──
+   注：不可见状态由 JS 显式设置 display:none 控制（见下方 JS），
+   不使用 visibility+transition-delay 的写法 —— 该写法在 iOS Safari 上
+   transition 列表切换时延迟计时不可靠，会导致视觉状态与可点击状态错位
+   （时而点不进输入框，时而该隐身时还能点到）。*/
 .art-comment-row{
   position:absolute;
   left:0; right:0; bottom:0;
@@ -1544,16 +1548,13 @@ button, a, input, label, [onclick], video {
   box-shadow:0 -8px 24px rgba(0,0,0,.35);
   z-index:50;
   opacity:0;
-  visibility:hidden;
   transform:translateY(100%);
-  transition:opacity .32s ease, transform .32s ease, visibility 0s linear .32s;
+  transition:opacity .32s ease, transform .32s ease;
   pointer-events:none;
 }
 .art-comment-row.docked{
   opacity:1;
-  visibility:visible;
   transform:translateY(0);
-  transition:opacity .32s ease, transform .32s ease;
   pointer-events:auto;
 }
 @media(max-width:768px){
@@ -2281,8 +2282,8 @@ Digital Video, Accademia di Belle Arti di Roma.</p>
     </div>
   </div>
 
-  <!-- 唯一的评论输入框：固定贴底，平时隐藏，滚动到评论区时淡入显示 -->
-  <div class="comment-row art-comment-row" id="artCommentRow" style="display:flex;gap:8px">
+  <!-- 唯一的评论输入框：固定贴底，平时隐藏（display:none，由JS在贴底时切换），滚动到评论区时淡入显示 -->
+  <div class="comment-row art-comment-row" id="artCommentRow" style="display:none;gap:8px">
     <input id="artCommentName" class="art-comment-input" placeholder="留下大名" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:'Jost',sans-serif;font-size:.72rem;outline:none">
     <input id="artCommentMsg" class="art-comment-input" placeholder="說點什麽..." style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:'Jost',sans-serif;font-size:.72rem;outline:none">
     <button id="artCommentSend" class="art-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:'Jost',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>
@@ -4570,8 +4571,12 @@ function doCopy(btn){
     (function(){
       var row = document.getElementById('artCommentRow');
       if(!row) return;
+      // 切换文章时清掉上一次的隐藏定时器，避免残留定时器在新文章上误触发 display:none
+      if(row._hideTimer){ clearTimeout(row._hideTimer); row._hideTimer = null; }
+      row.classList.remove('docked');
+      row.style.display = 'none'; // 初始状态一律隐藏，由滚动贴底逻辑决定何时显示
       if(hasComments){
-        row.style.display = 'flex';
+        row.dataset.hasComments = '1';
         row.dataset.commentId = d.commentId;
         var nameEl = document.getElementById('artCommentName');
         var msgEl  = document.getElementById('artCommentMsg');
@@ -4582,8 +4587,7 @@ function doCopy(btn){
           sendBtn.onclick = function(){ submitC(d.commentId, true); };
         }
       } else {
-        row.style.display = 'none';
-        row.classList.remove('docked');
+        row.dataset.hasComments = '0';
       }
     })();
 
@@ -4746,7 +4750,36 @@ function doCopy(btn){
   };
 
   // ── 阅读进度 + 评论输入框贴底 ──
-  var DOCK_THRESHOLD = 99; // 滚动进度达到此百分比视为"读完"，触发输入框贴底
+  // 1) 用滞后区间(hysteresis)代替单一阈值，避免在临界点附近小幅滚动时
+  //    docked 状态反复加上/摘掉，造成留言框忽隐忽现的闪烁。
+  // 2) 不可见时用 JS 显式设置 display:none（动画播完后才设），确保
+  //    "隐身"时真正不占据点击/视觉空间，不依赖 CSS visibility+delay
+  //    （该写法在 iOS 上不可靠，会导致点击状态与视觉状态错位）。
+  var DOCK_SHOW_THRESHOLD = 99; // 滚动进度达到此百分比才"出现"
+  var DOCK_HIDE_THRESHOLD = 90; // 要回退到此百分比以下才"消失"
+  var DOCK_ANIM_MS = 320; // 必须与 CSS .art-comment-row 的 transition 时长一致
+
+  function dockCommentRow(commentRow){
+    if(commentRow._hideTimer){ clearTimeout(commentRow._hideTimer); commentRow._hideTimer = null; }
+    if(commentRow.style.display === 'none' || !commentRow.style.display){
+      commentRow.style.display = 'flex';
+    }
+    // 强制 reflow，确保从 display:none 切回来时，下一行加 class 能正确触发过渡动画
+    void commentRow.offsetHeight;
+    commentRow.classList.add('docked');
+  }
+  function undockCommentRow(commentRow){
+    commentRow.classList.remove('docked');
+    if(commentRow._hideTimer) clearTimeout(commentRow._hideTimer);
+    commentRow._hideTimer = setTimeout(function(){
+      // 动画播完后才真正移出渲染/点击层，避免半路被打断时视觉跳变
+      if(!commentRow.classList.contains('docked')){
+        commentRow.style.display = 'none';
+      }
+      commentRow._hideTimer = null;
+    }, DOCK_ANIM_MS);
+  }
+
   artScroll.addEventListener('scroll', function(){
     var max = artScroll.scrollHeight - artScroll.clientHeight;
     var pct = max > 0 ? (artScroll.scrollTop / max * 100) : 0;
@@ -4754,20 +4787,24 @@ function doCopy(btn){
     artTitleBar.classList.toggle('vis', artScroll.scrollTop > 80);
 
     var commentRow = document.getElementById('artCommentRow');
-    if(commentRow){
-      var shouldDock = pct >= DOCK_THRESHOLD;
-      commentRow.classList.toggle('docked', shouldDock);
+    if(commentRow && commentRow.dataset.hasComments === '1'){
+      var isDocked = commentRow.classList.contains('docked');
+      if(!isDocked && pct >= DOCK_SHOW_THRESHOLD){
+        dockCommentRow(commentRow);
+      } else if(isDocked && pct < DOCK_HIDE_THRESHOLD){
+        undockCommentRow(commentRow);
+      }
     }
   }, {passive:true});
 
   // 内容太短、没有滚动空间（无法触发 scroll 事件）时，自动弹起评论输入框
   function checkAutoExpandComment(){
     var commentRow = document.getElementById('artCommentRow');
-    if(!commentRow || commentRow.style.display === 'none') return;
+    if(!commentRow || commentRow.dataset.hasComments !== '1') return;
     var max = artScroll.scrollHeight - artScroll.clientHeight;
     if(max <= 4){ // 几乎没有可滚动空间（留 4px 容差）
       artProgress.style.width = '100%';
-      commentRow.classList.add('docked');
+      dockCommentRow(commentRow);
     }
   }
   // 文章打开动画结束后检查一次（此时大部分内容已渲染）
@@ -4782,9 +4819,13 @@ function doCopy(btn){
   }
   window.addEventListener('resize', checkAutoExpandComment);
 
-  // 切换/关闭文章时重置贴底状态（避免下一篇文章残留 docked 样式）
+  // 切换/关闭文章时重置贴底状态（避免下一篇文章残留 docked 样式或残留定时器）
   document.addEventListener('articleClose', function(){
-    document.querySelectorAll('.art-comment-row.docked').forEach(function(el){ el.classList.remove('docked'); });
+    document.querySelectorAll('.art-comment-row').forEach(function(el){
+      if(el._hideTimer){ clearTimeout(el._hideTimer); el._hideTimer = null; }
+      el.classList.remove('docked');
+      el.style.display = 'none';
+    });
   });
 
   // ── 分享按钮 ──
