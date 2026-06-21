@@ -433,16 +433,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   -webkit-tap-highlight-color:transparent;
   background-image:linear-gradient(to right, var(--gold) 50%, var(--fg-d) 50%);
   background-size:200% 100%;
-  background-repeat:no-repeat;
+  background-repeat:repeat-x;
   background-position:100% 0;
   -webkit-background-clip:text;
   background-clip:text;
   -webkit-text-fill-color:transparent;
   color:rgba(0,0,0,0.01);
-  will-change:background-position;
+  will-change:background-position,transform;
+  transform:translateZ(0);
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
   transition:background-position .58s cubic-bezier(.22,.68,0,1.2),
              transform .28s cubic-bezier(.4,0,.2,1),
-             letter-spacing .28s cubic-bezier(.4,0,.2,1),
              filter .22s cubic-bezier(.4,0,.2,1);
 }
 .tab:hover{
@@ -452,7 +454,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .tab:focus:not(.on){background-position:100% 0;filter:none;}
 .tab.on{
   background-position:0% 0;
-  transform:scale(1.08);
+  transform:translateZ(0) scale(1.08);
   letter-spacing:.32em;
   filter:none;
 }
