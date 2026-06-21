@@ -1530,7 +1530,7 @@ button, a, input, label, [onclick], video {
 .art-send-btn{ transition:background .2s,border-color .2s,color .2s,transform .2s; cursor:pointer !important; pointer-events:all !important; }
 .art-send-btn.sent{ border-color:rgba(196,154,82,.6) !important; color:var(--gold) !important; transform:scale(1.06); }
 
-/* ── 评论输入框：唯一一份，绝对定位贴合 articleOverlay 底部；平时隐藏，滚动到底部时淡入显示 ── */
+/* ── 评论输入框：唯一一份，绝对定位贴合 articleOverlay 底部；平时彻底隐身（visibility:hidden，不占点击空间），滚动到底部时淡入显示 ── */
 .art-comment-row{
   position:absolute;
   left:0; right:0; bottom:0;
@@ -1544,13 +1544,16 @@ button, a, input, label, [onclick], video {
   box-shadow:0 -8px 24px rgba(0,0,0,.35);
   z-index:50;
   opacity:0;
+  visibility:hidden;
   transform:translateY(100%);
-  transition:opacity .32s ease, transform .32s ease;
+  transition:opacity .32s ease, transform .32s ease, visibility 0s linear .32s;
   pointer-events:none;
 }
 .art-comment-row.docked{
   opacity:1;
+  visibility:visible;
   transform:translateY(0);
+  transition:opacity .32s ease, transform .32s ease;
   pointer-events:auto;
 }
 @media(max-width:768px){
@@ -4743,10 +4746,7 @@ function doCopy(btn){
   };
 
   // ── 阅读进度 + 评论输入框贴底 ──
-  // 用滞后区间(hysteresis)代替单一阈值，避免在临界点附近小幅滚动时
-  // docked 状态反复加上/摘掉，造成留言框忽隐忽现的闪烁 bug。
-  var DOCK_SHOW_THRESHOLD = 99; // 滚动进度达到此百分比才"出现"
-  var DOCK_HIDE_THRESHOLD = 90; // 要回退到此百分比以下才"消失"
+  var DOCK_THRESHOLD = 99; // 滚动进度达到此百分比视为"读完"，触发输入框贴底
   artScroll.addEventListener('scroll', function(){
     var max = artScroll.scrollHeight - artScroll.clientHeight;
     var pct = max > 0 ? (artScroll.scrollTop / max * 100) : 0;
@@ -4755,12 +4755,8 @@ function doCopy(btn){
 
     var commentRow = document.getElementById('artCommentRow');
     if(commentRow){
-      var isDocked = commentRow.classList.contains('docked');
-      if(!isDocked && pct >= DOCK_SHOW_THRESHOLD){
-        commentRow.classList.add('docked');
-      } else if(isDocked && pct < DOCK_HIDE_THRESHOLD){
-        commentRow.classList.remove('docked');
-      }
+      var shouldDock = pct >= DOCK_THRESHOLD;
+      commentRow.classList.toggle('docked', shouldDock);
     }
   }, {passive:true});
 
