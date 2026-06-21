@@ -3375,7 +3375,7 @@ function submitC(pid, fromArtRow, btnRef){
     // 文章内部唯一输入框（固定 id，与文章无关）
     nameEl = document.getElementById('artCommentName');
     msgEl  = document.getElementById('artCommentMsg');
-    btn    = document.getElementById('artCommentSend');
+    btn    = btnRef || document.getElementById('artCommentSend');
   } else {
     // 外面卡片输入框（按 commentId 命名）
     nameEl = document.getElementById('cn-'+pid);
@@ -4600,7 +4600,14 @@ function doCopy(btn){
         if(nameEl) nameEl.value = '';
         if(msgEl)  msgEl.value  = '';
         if(sendBtn){
-          sendBtn.onclick = function(){ submitC(d.commentId, true); };
+          // 用 addEventListener + 显式移除旧监听器，跟帖子外卡片的发送按钮保持
+          // 一致的绑定方式（不依赖 .onclick 单值覆盖，也不会在切换文章时重复叠加监听器）。
+          if(sendBtn._submitHandler){
+            sendBtn.removeEventListener('click', sendBtn._submitHandler);
+          }
+          var handler = function(){ submitC(d.commentId, true, sendBtn); };
+          sendBtn._submitHandler = handler;
+          sendBtn.addEventListener('click', handler);
         }
       } else {
         row.dataset.hasComments = '0';
