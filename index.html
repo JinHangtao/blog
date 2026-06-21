@@ -5044,8 +5044,12 @@ function doCopy(btn){
 <script>
 // 禁用右键
 document.addEventListener('contextmenu', e => e.preventDefault());
-// 禁止选中 & 拖拽
-document.addEventListener('selectstart', e => e.preventDefault());
+// 禁止选中 & 拖拽（放过输入框/文本域，否则移动端无法点击聚焦输入，导致留言框失效）
+document.addEventListener('selectstart', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+    e.preventDefault();
+});
 document.addEventListener('dragstart',   e => e.preventDefault());
 
 // 屏蔽快捷键
