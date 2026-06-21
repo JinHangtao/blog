@@ -3431,6 +3431,11 @@ function submitC(pid, fromArtRow, btnRef){
         });
       }
       if(document.getElementById('art-cl-' + pid)){
+        // 给文章内部的贴底输入框一段保护期：评论列表重渲染会触发 resize 检查，
+        // 但此刻用户的滚动位置没变、容器变长，算出来的百分比会被误判为"该收起"，
+        // 导致用户刚发完评论输入框就消失。保护期内跳过那次自动收起判断。
+        var artRowEl = document.getElementById('artCommentRow');
+        if(artRowEl) artRowEl._submitProtectUntil = Date.now() + 1500;
         loadC(pid, 'art-cl-' + pid, false);
       }
     } else {
@@ -4821,20 +4826,38 @@ function doCopy(btn){
   }, {passive:true});
 
   // 内容太短、没有滚动空间（无法触发 scroll 事件）时，自动弹起评论输入框；
-  // 反之内容变长、重新有了滚动空间时（例如发表评论后列表变长），也要主动取消贴底，
-  // 否则 dock 之后永远没有对应的 undock 时机，会导致输入框一直卡在显示状态、持续占位。
+  // 反之内容变长、重新有了滚动空间时，也要主动取消贴底 —— 但有两个坑必须避开：
+  //
+  // 1) 发表评论成功后，评论列表变长会触发 ResizeObserver，但用户的 scrollTop
+  //    并不会跟着自动变化。这时 pct = scrollTop/max*100 的分母 max 突然变大，
+  //    算出来的 pct 会瞬间跌破阈值，被误判为"该收起"——结果是用户刚发完评论、
+  //    输入框立刻被收走，体验上像是"看不见但还占着地方"。所以：刚提交成功后
+  //    的保护期内，跳过这次自动收起判断。
+  // 2) DOM 重渲染期间 ResizeObserver 可能连续触发多次，每次都重新启动
+  //    undockCommentRow 里那个 setTimeout，如果触发间隔小于动画时长，
+  //    定时器会被反复 clearTimeout 重置、永远没机会真正跑完，导致元素卡在
+  //    "已经不是 docked，但 display 还没被设回 none"的中间态——视觉上像是
+  //    隐身了，但其实还在占位、还没有被真正收起。这里用防抖(debounce)合并
+  //    短时间内的多次触发，只在真正稳定后判断一次。
+  var _checkAutoExpandTimer = null;
   function checkAutoExpandComment(){
-    var commentRow = document.getElementById('artCommentRow');
-    if(!commentRow || commentRow.dataset.hasComments !== '1') return;
-    var max = artScroll.scrollHeight - artScroll.clientHeight;
-    var isDocked = commentRow.classList.contains('docked');
-    if(max <= 4){ // 几乎没有可滚动空间（留 4px 容差）
-      artProgress.style.width = '100%';
-      if(!isDocked) dockCommentRow(commentRow);
-    } else if(isDocked && artScroll.scrollTop / max * 100 < DOCK_HIDE_THRESHOLD){
-      // 已经有滚动空间了，且当前滚动位置不在底部附近，说明是因为内容变长而不再需要强制贴底
-      undockCommentRow(commentRow);
-    }
+    if(_checkAutoExpandTimer) clearTimeout(_checkAutoExpandTimer);
+    _checkAutoExpandTimer = setTimeout(function(){
+      _checkAutoExpandTimer = null;
+      var commentRow = document.getElementById('artCommentRow');
+      if(!commentRow || commentRow.dataset.hasComments !== '1') return;
+      // 提交成功后的保护期内，不自动收起，避免用户刚发完评论输入框就消失
+      if(commentRow._submitProtectUntil && Date.now() < commentRow._submitProtectUntil) return;
+      var max = artScroll.scrollHeight - artScroll.clientHeight;
+      var isDocked = commentRow.classList.contains('docked');
+      if(max <= 4){ // 几乎没有可滚动空间（留 4px 容差）
+        artProgress.style.width = '100%';
+        if(!isDocked) dockCommentRow(commentRow);
+      } else if(isDocked && artScroll.scrollTop / max * 100 < DOCK_HIDE_THRESHOLD){
+        // 已经有滚动空间了，且当前滚动位置不在底部附近，说明是因为内容变长而不再需要强制贴底
+        undockCommentRow(commentRow);
+      }
+    }, 80); // 80ms 防抖：合并 ResizeObserver 连续触发的多次回调，等布局稳定后再判断一次
   }
   // 文章打开动画结束后检查一次（此时大部分内容已渲染）
   // 字体加载完成后再检查一次（字体切换可能改变文字行高/总高度）
@@ -4852,6 +4875,7 @@ function doCopy(btn){
   document.addEventListener('articleClose', function(){
     document.querySelectorAll('.art-comment-row').forEach(function(el){
       if(el._hideTimer){ clearTimeout(el._hideTimer); el._hideTimer = null; }
+      el._submitProtectUntil = null;
       el.classList.remove('docked');
       el.style.display = 'none';
     });
