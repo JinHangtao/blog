@@ -3363,7 +3363,7 @@ function containsBanned(text){
   var t=text.toLowerCase().replace(/\s/g,'');
   return BANNED_WORDS.some(function(w){return t.indexOf(w.toLowerCase())!==-1;});
 }
-function submitC(pid, fromArtRow){
+function submitC(pid, fromArtRow, btnRef){
   var now=Date.now();
   if(lastSubmit[pid]&&now-lastSubmit[pid]<15000){
     var sec=Math.ceil((15000-(now-lastSubmit[pid]))/1000);
@@ -3380,9 +3380,16 @@ function submitC(pid, fromArtRow){
     // 外面卡片输入框（按 commentId 命名）
     nameEl = document.getElementById('cn-'+pid);
     msgEl  = document.getElementById('cm-'+pid);
-    document.querySelectorAll('button[onclick]').forEach(function(b){
-      if(b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("submitC('"+pid+"')")!==-1) btn=b;
-    });
+    if(btnRef){
+      // 优先使用调用方直接传入的按钮引用（addEventListener 绑定时传入），
+      // 不再依赖解析 onclick 属性字符串反查 —— 当 commentId 含特殊字符时
+      // 那种反查方式（以及旧版内联 onclick 本身）会直接失效。
+      btn = btnRef;
+    } else {
+      document.querySelectorAll('button[onclick]').forEach(function(b){
+        if(b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("submitC('"+pid+"')")!==-1) btn=b;
+      });
+    }
   }
   if(!nameEl||!msgEl)return;
   var name=nameEl.value.trim();
@@ -4381,7 +4388,7 @@ function doCopy(btn){
           '<div class="comment-row" style="display:flex;gap:8px">' +
             '<input id="cn-' + a.commentId + '" placeholder="留下大名" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
             '<input id="cm-' + a.commentId + '" placeholder="說點什麽..." style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
-            '<button onclick="submitC(\'' + a.commentId + '\')" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:\'Jost\',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>' +
+            '<button class="comment-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:\'Jost\',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>' +
           '</div>' +
         '</div>';
 
@@ -4391,6 +4398,15 @@ function doCopy(btn){
       el.querySelector('.blog-open-btn').addEventListener('click', function(){
         openArticle(a.id);
       });
+
+      // 绑定留言发送按钮（addEventListener + 直接传 commentId 变量，不用 inline onclick 字符串拼接，
+      // 避免 commentId 里若含单引号等特殊字符会破坏内联 onclick 的 HTML/JS 语法，导致点击静默无反应）
+      var sendBtnEl = el.querySelector('.comment-send-btn');
+      if(sendBtnEl){
+        sendBtnEl.addEventListener('click', function(){
+          submitC(a.commentId, false, sendBtnEl);
+        });
+      }
     });
 
     // 折叠超长预览
