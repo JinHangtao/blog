@@ -646,6 +646,23 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .ph-img span{font-family:'Jost',sans-serif;font-weight:300;font-size:.52rem;letter-spacing:.16em;color:var(--line2);text-align:center;line-height:2.2;padding:14px}
 .gi1 .ph-img{height:420px}
 
+/* ══ 图片加载渐显（显影感）══ */
+img[loading="lazy"],
+.blog-img{
+  opacity:0;
+  transform:scale(1.045);
+  transition:opacity .95s cubic-bezier(.16,1,.3,1),
+             transform 1.1s cubic-bezier(.16,1,.3,1);
+}
+img[loading="lazy"].img-in,
+.blog-img.img-in{
+  opacity:1;
+  transform:scale(1);
+}
+@media (prefers-reduced-motion: reduce){
+  img[loading="lazy"], .blog-img{opacity:1;transform:none;transition:none}
+}
+
 /* ══ STATEMENT — full-bleed poem ══ */
 #p-stmt{padding:0 !important;overflow:hidden !important;}
 .stmt-full{
@@ -5220,6 +5237,51 @@ function doCopy(btn){
       }
     }
   });
+})();
+</script>
+
+<!-- 图片加载渐显 -->
+<script>
+(function(){
+  function markLoaded(img){
+    if(!img || img.classList.contains('img-in')) return;
+    // rAF 确保 transition 能被浏览器捕捉到（尤其是缓存命中、瞬间 complete 的情况）
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){ img.classList.add('img-in'); });
+    });
+  }
+  function checkImg(img){
+    if(img.complete && img.naturalWidth > 0){ markLoaded(img); }
+  }
+  // 捕获阶段监听 load（img 的 load 不冒泡，但捕获阶段能拿到，且能覆盖动态插入的图片）
+  document.addEventListener('load', function(e){
+    var t = e.target;
+    if(t && t.tagName === 'IMG' && (t.hasAttribute('loading') || t.classList.contains('blog-img'))){
+      markLoaded(t);
+    }
+  }, true);
+  document.addEventListener('error', function(e){
+    var t = e.target;
+    if(t && t.tagName === 'IMG'){ markLoaded(t); } // 加载失败也别一直空白等着
+  }, true);
+
+  function scan(root){
+    (root || document).querySelectorAll('img[loading="lazy"], .blog-img').forEach(checkImg);
+  }
+  document.addEventListener('DOMContentLoaded', function(){ scan(); });
+  scan();
+
+  // 文章 / 画廊内容是动态插入的，监听整棵 DOM 树，随时补检
+  var mo = new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes && m.addedNodes.forEach(function(n){
+        if(n.nodeType !== 1) return;
+        if(n.tagName === 'IMG'){ checkImg(n); }
+        else if(n.querySelectorAll){ scan(n); }
+      });
+    });
+  });
+  mo.observe(document.body, {childList:true, subtree:true});
 })();
 </script>
 
