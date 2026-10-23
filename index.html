@@ -729,7 +729,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-img img.lb-fadein{animation:lbFadeIn .5s cubic-bezier(.4,0,.2,1) forwards;}
 .lb-spinner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .18s;}
 .lb-spinner.vis{opacity:1;}
-.lb-spinner::after{content:'';width:20px;height:20px;border:1.5px solid rgba(196,154,82,.2);border-top-color:rgba(196,154,82,.75);border-radius:50%;animation:lbspin .7s linear infinite;}
+.lb-spinner::after{content:'';width:22px;height:22px;background:conic-gradient(from 0deg,rgba(255,255,255,.12),rgba(255,255,255,.9));-webkit-mask:repeating-conic-gradient(#000 0 8deg,transparent 8deg 30deg),radial-gradient(circle,transparent 5px,#000 5.5px,#000 11px,transparent 11.5px);-webkit-mask-composite:source-in;mask:repeating-conic-gradient(#000 0 8deg,transparent 8deg 30deg),radial-gradient(circle,transparent 5px,#000 5.5px,#000 11px,transparent 11.5px);mask-composite:intersect;animation:piSpin 1s steps(12) infinite;}
 @keyframes lbspin{to{transform:rotate(360deg);}}
 .lb-side{width:188px;flex-shrink:0;padding-bottom:0;transition:opacity .25s cubic-bezier(.4,0,.2,1);position:absolute;left:calc(100% + 32px);top:78%;transform:translateY(-50%);}
 .lb-idx{font-family:'Jost',sans-serif;font-weight:400;font-size:.52rem;letter-spacing:.36em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
@@ -1649,6 +1649,40 @@ button, a, input, label, [onclick], video {
   .jh-toast{ font-size:.68rem; padding:15px 18px 14px; max-width:88vw; }
   .jh-toast-msg{ font-size:.85rem; }
 }
+
+/* ══ iOS-style image loading: frosted tile + activity indicator → focus-pull reveal ══ */
+.pi-skel{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:inherit;overflow:hidden;
+  container-type:size;display:flex;align-items:center;justify-content:center;
+  background:rgba(235,235,245,.06);
+  animation:piPulse 2.4s cubic-bezier(.45,0,.55,1) infinite;
+  transition:opacity .75s cubic-bezier(.2,.8,.2,1);}
+@keyframes piPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.pi-skel.pi-out{opacity:0;animation:none;}
+/* UIActivityIndicatorView-style 12 spokes, shown only if loading takes > 0.3s */
+.pi-spin{width:20px;height:20px;opacity:0;flex:none;
+  background:conic-gradient(from 0deg,rgba(255,255,255,.12),rgba(255,255,255,.85));
+  -webkit-mask:repeating-conic-gradient(#000 0 8deg,transparent 8deg 30deg),radial-gradient(circle,transparent 4.5px,#000 5px,#000 10px,transparent 10.5px);
+  -webkit-mask-composite:source-in;
+  mask:repeating-conic-gradient(#000 0 8deg,transparent 8deg 30deg),radial-gradient(circle,transparent 4.5px,#000 5px,#000 10px,transparent 10.5px);
+  mask-composite:intersect;
+  animation:piSpinIn .35s ease .3s forwards,piSpin 1s steps(12) infinite;}
+@keyframes piSpinIn{to{opacity:.8}}
+@keyframes piSpin{to{transform:rotate(360deg)}}
+@container (max-width:64px){.pi-spin{display:none}}
+.pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;}
+.pi-wrap:not(.pi-ready){min-height:150px;}
+img.pi[data-pi]{opacity:0!important;transform:scale(1.05)!important;
+  filter:blur(18px) var(--pi-f,brightness(1))!important;will-change:opacity,filter,transform;
+  transition:opacity .55s cubic-bezier(.2,.8,.2,1),filter .85s cubic-bezier(.2,.8,.2,1),transform 1s cubic-bezier(.2,.8,.2,1)!important;}
+img.pi[data-pi].pi-in{opacity:1!important;transform:scale(1)!important;filter:blur(0) var(--pi-f,brightness(1))!important;}
+@media (prefers-reduced-motion:reduce){
+  .pi-skel{animation:none}.pi-spin{animation:piSpinIn .3s ease .3s forwards}
+  img.pi[data-pi]{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .35s linear!important}
+  img.pi[data-pi].pi-in{filter:var(--pi-f,none)!important}
+}
+/* Lightbox: focus-pull when the full image is ready */
+@keyframes lbFocus{from{opacity:0;filter:blur(18px);transform:scale(.975)}to{opacity:1;filter:blur(0);transform:none}}
+.lb-img img.lb-fadein{animation:lbFocus .8s cubic-bezier(.2,.8,.2,1) forwards;}
 </style>
 <script>
 function rippleThen(e,el,id){
@@ -5247,6 +5281,70 @@ document.addEventListener('keydown', e => {
         (e.altKey && e.metaKey && k === 'I')
     ) { e.preventDefault(); e.stopPropagation(); return false; }
 });
+</script>
+<script>
+/* iOS-style progressive image reveal */
+(function(){
+  var SEL='.gi img,.gi1 img,.sb-av img,.mob-av img,.blog-cover-img';
+  var seq=0, seqT=null;
+  function bind(img){
+    if(img.dataset.pi) return;
+    img.dataset.pi='1';
+    var f=getComputedStyle(img).filter;
+    img.style.setProperty('--pi-f', (f && f!=='none') ? f : 'brightness(1)');
+    var slot, wrapped=false;
+    if(img.classList.contains('blog-cover-img')){
+      slot=document.createElement('div'); slot.className='pi-wrap';
+      img.parentNode.insertBefore(slot,img); slot.appendChild(img); wrapped=true;
+    } else {
+      slot=img.parentElement;
+      if(getComputedStyle(slot).position==='static') slot.style.position='relative';
+    }
+    img.classList.add('pi');
+    var skel=document.createElement('div');
+    skel.className='pi-skel';
+    skel.innerHTML='<i class="pi-spin"></i>';
+    slot.insertBefore(skel,slot.firstChild);
+
+    var shown=false;
+    function reveal(){
+      if(shown) return; shown=true;
+      // cascade: images finishing together enter ~50ms apart
+      var d=Math.min(seq*50,300); seq++;
+      clearTimeout(seqT); seqT=setTimeout(function(){seq=0;},160);
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        img.style.transitionDelay=d+'ms';
+        skel.style.transitionDelay=d+'ms';
+        img.classList.add('pi-in');
+        skel.classList.add('pi-out');
+        if(wrapped) slot.classList.add('pi-ready');
+        setTimeout(function(){
+          // hand control back to the page's original CSS (hover filters etc.)
+          img.classList.remove('pi','pi-in');
+          img.style.removeProperty('--pi-f');
+          img.style.transitionDelay='';
+          if(skel.parentNode) skel.parentNode.removeChild(skel);
+        }, d+1100);
+      }); });
+    }
+    function ready(){ if(img.decode){ img.decode().then(reveal,reveal); } else reveal(); }
+    img.addEventListener('load',ready,{once:true});
+    img.addEventListener('error',function(){
+      img.classList.remove('pi'); img.style.removeProperty('--pi-f');
+      if(skel.parentNode) skel.parentNode.removeChild(skel);
+    },{once:true});
+    if(img.complete && img.naturalWidth) ready();
+  }
+  function scan(n){
+    if(!n || n.nodeType!==1) return;
+    if(n.matches && n.matches(SEL)) bind(n);
+    if(n.querySelectorAll) n.querySelectorAll(SEL).forEach(bind);
+  }
+  scan(document.body);
+  new MutationObserver(function(ms){
+    ms.forEach(function(m){ m.addedNodes.forEach(scan); });
+  }).observe(document.body,{childList:true,subtree:true});
+})();
 </script>
 </body>
 </html>
