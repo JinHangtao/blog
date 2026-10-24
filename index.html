@@ -3198,14 +3198,65 @@ function _lbThumbOf(idx){
   var el = document.querySelector('[onclick="openLb('+idx+')"]');
   return el ? el.querySelector('img') : null;
 }
-// 缩略图是否在视口里有足够可见面积（只看视口；tab 栏不再参与判断，图片直接飞）
+/* ══ 飞行图永远铺在缩略图的【完整矩形】上；被 tab 栏 / 容器边缘遮住的部分，
+   只靠一个静态外层裁切窗来体现 ══
+   做法与 Android/Compose 的 zoom 转场修复一致（Amethyst #4443）：同时记录缩略图的
+   「完整矩形」和「可见矩形」，图片按完整矩形定位，只透过一个窗口显示——
+   起点窗口 = 可见那一小块，飞行中窗口平滑展开到整个屏幕；飞回时反过来。
+   页面不滚动，所以视觉上就是：图片从 tab 栏下面「钻出来」、再「钻回去」。 */
+
+// 缩略图能被看到的窗口：滚动容器可视区 去掉 sticky tab 栏，再与视口求交
+function _lbWindow(){
+  var m  = document.querySelector('.main').getBoundingClientRect();
+  var tb = document.querySelector('.topbar').getBoundingClientRect();
+  return {
+    left:   Math.max(m.left, 0),
+    right:  Math.min(m.right, window.innerWidth),
+    top:    Math.max(m.top, tb.bottom, 0),
+    bottom: Math.min(m.bottom, window.innerHeight)
+  };
+}
+// 缩略图「在渲染」且至少有一小块露在窗口里（≥12%）才飞；否则走缩小淡出
 function _lbThumbVisible(t){
   if(!t) return false;
-  var a = t.getBoundingClientRect();
+  var a = t.getBoundingClientRect(), w = _lbWindow();
   if(a.width < 8 || a.height < 8) return false;
-  var w = Math.min(a.right, window.innerWidth) - Math.max(a.left, 0);
-  var h = Math.min(a.bottom, window.innerHeight) - Math.max(a.top, 0);
-  return w > 0 && h > 0 && (w * h) / (a.width * a.height) >= 0.25;
+  var vw = Math.min(a.right, w.right)   - Math.max(a.left, w.left);
+  var vh = Math.min(a.bottom, w.bottom) - Math.max(a.top, w.top);
+  return vw > 0 && vh > 0 && (vw * vh) / (a.width * a.height) >= 0.12;
+}
+// 外层 #lbImgBox 的裁切窗关键帧。box 本身不动（只有里面的 img 在 transform），所以窗口不会漂移。
+// 窗口：可见矩形 ⇄ 整个视口。可见矩形 = 缩略图完整矩形 ∩ 窗口（被遮住的边保持直角，没被遮的边仍是图片自带的圆角）
+function _lbBoxFrames(t, dir){
+  var bx = document.getElementById('lbImgBox').getBoundingClientRect();
+  var a  = t.getBoundingClientRect(), w = _lbWindow();
+  var v  = { l: Math.max(a.left, w.left), t: Math.max(a.top, w.top),
+             r: Math.min(a.right, w.right), b: Math.min(a.bottom, w.bottom) };
+  if(v.r <= v.l || v.b <= v.t) v = { l: a.left, t: a.top, r: a.right, b: a.bottom };
+  function ins(l, tp, r, b){
+    return 'inset(' + [tp - bx.top, bx.right - r, bx.bottom - b, l - bx.left]
+      .map(function(n){ return n.toFixed(1) + 'px'; }).join(' ') + ')';
+  }
+  var small = ins(v.l, v.t, v.r, v.b);
+  var full  = ins(0, 0, window.innerWidth, window.innerHeight);
+  return dir === 'in' ? [{ clipPath: small }, { clipPath: full }]
+                      : [{ clipPath: full },  { clipPath: small }];
+}
+// 灯箱里切图后，如果对应缩略图几乎完全不在窗口里（比如翻到很远的一张），
+// 趁背景几乎不透明时悄悄把它滚进来，这样关闭时仍有地方可飞回；飞行过程中页面不动
+function _lbKeepThumbInView(idx){
+  var t = _lbThumbOf(idx);
+  if(!t) return;
+  var a = t.getBoundingClientRect();
+  if(a.width < 8 || _lbThumbVisible(t)) return;     // 不在渲染（别的 tab）或已经够可见：不处理
+  var w = _lbWindow();
+  var d = (a.top + a.height / 2) - (w.top + w.bottom) / 2;
+  var m = document.querySelector('.main');
+  if(m.scrollHeight > m.clientHeight + 1){ m.scrollTop += d; }
+  else {
+    var root = document.documentElement, prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto'; window.scrollBy(0, d); root.style.scrollBehavior = prev;
+  }
 }
 function _lbHideThumb(t){
   if(_lbThumb && _lbThumb !== t) _lbThumb.style.visibility = '';
@@ -3223,7 +3274,7 @@ function _lbCancelAnim(){
 // 计算：把灯箱图（矩形 b）变换成"缩略图（矩形 a）里看到的样子"
 // 缩略图是 object-fit:cover 裁切的，所以用 scale(cover) + clip-path 裁掉多余部分，圆角同步缩放。
 // 被 tab 栏 / 区块边距遮住的部分【不】在这里处理（这里的裁切跟着 transform 走，飞行中会漂移），
-// （tab 栏避让已移除：图片直接飞，不再被裁切。）
+// （遮挡由外层静态裁切窗 _lbBoxFrames 处理：图片按缩略图完整矩形飞，只透过窗口显示。）
 function _lbPose(t, b){
   var a  = t.getBoundingClientRect();
   var s  = Math.max(a.width / b.width, a.height / b.height);
@@ -3305,6 +3356,7 @@ function _lbTrack(anim, t, b, dir){
         if(a.width > 4 && a.height > 4){
           try{
             anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b), dir));
+            if(_lbAnimBox && _lbAnimBox.effect) _lbAnimBox.effect.setKeyframes(_lbBoxFrames(t, dir));
           }catch(e){}
         }
       }
@@ -3330,6 +3382,8 @@ function _lbFlyIn(idx, tok){
   _lbHideThumb(t);
   img.style.opacity = '';
   _lbCancelAnim();
+  _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(t, 'in'),
+    { duration: 520, easing: _LB_EASE, fill: 'backwards' });   // 起点：只露出缩略图可见的那一块
   var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
   _lbAnim = anim;
   anim.onfinish = function(){
@@ -3356,6 +3410,8 @@ function _lbFlyOut(){
     var b = img.getBoundingClientRect();
     if(b.width > 4 && b.height > 4){
       var p = _lbPose(t, b);
+      _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(t, 'out'),
+        { duration: 460, easing: _LB_EASE, fill: 'forwards' });   // 终点：收进缩略图可见的那一块（钻回 tab 栏下面）
       var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
       _lbAnim = anim;
       _lbTrack(anim, t, b, 'out');
@@ -3373,7 +3429,8 @@ function _lbFlyOut(){
   }
   // 降级：图片自身淡出
   if(img.getAttribute('src') && img.style.opacity !== '0'){
-    _lbAnim = img.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease', fill: 'forwards' });
+    _lbAnim = img.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.92)' }],
+                          { duration: 320, easing: _LB_EASE, fill: 'forwards' });   // 找不到缩略图：轻微缩小再淡出（iOS 式）
   }
   return 350;
 }
@@ -3431,6 +3488,7 @@ function _lbShow(idx, opening){
       if(dp && dp.then) dp.then(go, go); else go();
       setTimeout(go, 700);
     } else {
+      _lbKeepThumbInView(idx);
       _lbHideThumb(_lbThumbOf(idx));
     }
     _lbGuard(idx, tok);
