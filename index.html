@@ -3470,6 +3470,20 @@ function _lbDrive(img, t, b, dir, dur){
   var FV = _lbParseFilter(dir === 'in' ? meta.filter : (meta.rest || meta.filter));   // 缩略图端的滤镜
   var hasFilter = Math.abs(FV.b - 1) > .002 || Math.abs(FV.s - 1) > .002 || Math.abs(FV.c - 1) > .002;
 
+  /* 滤镜（缩略图的暗色调 ⇄ 原色）交给 WAAPI：filter 是可由合成器线程驱动的属性，
+     不占主线程；以前每帧 JS 拼 filter 字符串并写入，大图每帧都要重新提交 + 重绘，手机上最容易掉帧。
+     缓动曲线与 JS 进度同一条，视觉不变。不支持时回退到逐帧 JS 写入。 */
+  var fAnim = null;
+  if(hasFilter && img.animate){
+    var _idleF = 'brightness(1) saturate(1) contrast(1)';
+    var _thumbF = 'brightness(' + FV.b + ') saturate(' + FV.s + ') contrast(' + FV.c + ')';
+    try{
+      fAnim = img.animate(
+        dir === 'in' ? [{ filter: _thumbF }, { filter: _idleF }] : [{ filter: _idleF }, { filter: _thumbF }],
+        { duration: dur, easing: _LB_EASE, fill: 'both' });
+    }catch(e){ fAnim = null; }
+  }
+
   var prevTr = img.style.transition;
   img.style.transition = 'none';                       // 防止残留的 CSS transition 把每帧写入再平滑一遍（=额外延迟）
 
@@ -3482,7 +3496,12 @@ function _lbDrive(img, t, b, dir, dur){
   window.addEventListener('wheel',     _stopScroll, { passive: false, capture: true });
   window.addEventListener('touchmove', _stopScroll, { passive: false, capture: true });
   window.addEventListener('keydown',   _stopKey,    { passive: false, capture: true });
+  // 缩略图位置只在「页面真的动过」时才重读（见 frame 里的说明）；iOS 惯性滚动也会持续触发 scroll
+  var dirtyUntil = 0;
+  function _onScrolled(){ dirtyUntil = performance.now() + 160; }
+  window.addEventListener('scroll', _onScrolled, { passive: true, capture: true });
   function _unlockScroll(){
+    window.removeEventListener('scroll',    _onScrolled, { capture: true });
     window.removeEventListener('wheel',     _stopScroll, { capture: true });
     window.removeEventListener('touchmove', _stopScroll, { capture: true });
     window.removeEventListener('keydown',   _stopKey,    { capture: true });
@@ -3493,6 +3512,7 @@ function _lbDrive(img, t, b, dir, dur){
     if(h._dead) return; h._dead = true;
     _unlockScroll();
     if(h._raf){ cancelAnimationFrame(h._raf); h._raf = 0; }
+    if(fAnim){ try{ fAnim.cancel(); }catch(e){} fAnim = null; }
     h.playState = 'idle';
     img.style.transform = ''; img.style.clipPath = ''; img.style.filter = ''; img.style.transition = prevTr;
     box.style.clipPath = '';
@@ -3502,6 +3522,7 @@ function _lbDrive(img, t, b, dir, dur){
   // 滚动延迟补偿：合成器线程滚动，主线程读到的位置总慢 1~2 帧 → 沿速度方向前推
   var LEAD_MS = 22, LEAD_MAX = 56;
   var prev = null, vx = 0, vy = 0, t0 = 0;
+  var nRead = 0, wasActive = false, cA = null, cP = null, cM = null;
 
   function frame(now){
     h._raf = 0;
@@ -3510,25 +3531,36 @@ function _lbDrive(img, t, b, dir, dur){
     var p = Math.min(1, Math.max(0, (now - t0) / dur));
     var u = dir === 'in' ? _lbEaseFn(p) : 1 - _lbEaseFn(p);     // 0 = 缩略图位，1 = 灯箱位
 
-    // ── 读 ──
-    var a = _lbThumbRect(t, b);
-    if(prev && now > prev.t){
-      var dt = Math.min(now - prev.t, 50);
-      vx = vx * .5 + ((a.left - prev.x) / dt) * .5;
-      vy = vy * .5 + ((a.top  - prev.y) / dt) * .5;
-    }
-    prev = { x: a.left, y: a.top, t: now };
-    var lx = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vx * LEAD_MS));
-    var ly = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vy * LEAD_MS));
-    if(Math.abs(lx) < .3) lx = 0; if(Math.abs(ly) < .3) ly = 0;
-    if(lx || ly) a = { left: a.left + lx, top: a.top + ly, right: a.right + lx, bottom: a.bottom + ly, width: a.width, height: a.height };
+    // ── 读 + 算 ──
+    // 飞行期间页面被锁滚动，缩略图位置恒定 → 不需要每帧 getBoundingClientRect
+    // （写后立刻读会强制样式/布局重算，是手机掉帧的主因之一）。
+    // 只在前两帧、以及检测到 scroll（含 iOS 惯性）后的 160ms 内才重读；停下来后再做一次「无前推」的校准读。
+    var active = nRead < 2 || now < dirtyUntil;
+    var a, P, M;
+    if(active || wasActive){
+      nRead++;
+      a = _lbThumbRect(t, b);
+      if(active){
+        if(prev && now > prev.t){
+          var dt = Math.min(now - prev.t, 50);
+          vx = vx * .5 + ((a.left - prev.x) / dt) * .5;
+          vy = vy * .5 + ((a.top  - prev.y) / dt) * .5;
+        }
+        prev = { x: a.left, y: a.top, t: now };
+        var lx = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vx * LEAD_MS));
+        var ly = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vy * LEAD_MS));
+        if(Math.abs(lx) < .3) lx = 0; if(Math.abs(ly) < .3) ly = 0;
+        if(lx || ly) a = { left: a.left + lx, top: a.top + ly, right: a.right + lx, bottom: a.bottom + ly, width: a.width, height: a.height };
+      } else { vx = vy = 0; prev = null; }
+      P = _lbPose(t, b, a, meta);
+      var d = Math.hypot(P.tx, P.ty) || 1, nx = -P.ty / d, ny = P.tx / d;       // 弧线中点（同 _lbMidTransform）
+      if(ny > 0){ nx = -nx; ny = -ny; }
+      var hh = Math.min(d * _LB_ARC_K, _LB_ARC_MAX);
+      M = { tx: P.tx * .5 + nx * hh, ty: P.ty * .5 + ny * hh, s: P.s + (1 - P.s) * _LB_MID_GROW };
+      cA = a; cP = P; cM = M;
+    } else { a = cA; P = cP; M = cM; }
+    wasActive = active;
 
-    // ── 算 ──
-    var P = _lbPose(t, b, a, meta);
-    var d = Math.hypot(P.tx, P.ty) || 1, nx = -P.ty / d, ny = P.tx / d;       // 弧线中点（同 _lbMidTransform）
-    if(ny > 0){ nx = -nx; ny = -ny; }
-    var hh = Math.min(d * _LB_ARC_K, _LB_ARC_MAX);
-    var M = { tx: P.tx * .5 + nx * hh, ty: P.ty * .5 + ny * hh, s: P.s + (1 - P.s) * _LB_MID_GROW };
     var A, B, k;
     if(u <= .5){ A = P; B = M; k = u * 2; } else { A = M; B = F; k = (u - .5) * 2; }
     var tx = _lbLerp(A.tx, B.tx, k), ty = _lbLerp(A.ty, B.ty, k), sc = _lbLerp(A.s, B.s, k);
@@ -3548,7 +3580,7 @@ function _lbDrive(img, t, b, dir, dur){
     img.style.transform = 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
     img.style.clipPath  = clip;
     // 滤镜随同一进度 u 平滑过渡（缩略图的暗色调 ⇄ 灯箱里的原色），不再在起点/终点跳变
-    if(hasFilter){
+    if(hasFilter && !fAnim){
       var fb = _lbLerp(FV.b, 1, u), fs = _lbLerp(FV.s, 1, u), fc = _lbLerp(FV.c, 1, u);
       img.style.filter = (u > .998) ? '' : 'brightness(' + fb.toFixed(3) + ') saturate(' + fs.toFixed(3) + ') contrast(' + fc.toFixed(3) + ')';
     }
