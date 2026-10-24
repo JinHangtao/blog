@@ -3304,6 +3304,7 @@ function _lbPose(t, b, a, m){
   var cardR = m.cardR;
   return {
     tx: tx, ty: ty, s: s,
+    ci: [top, right, bottom, left], cr: cardR / s,
     transform: 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + s.toFixed(4) + ')',
     clip: 'inset(' + top.toFixed(2) + 'px ' + right.toFixed(2) + 'px ' + bottom.toFixed(2) + 'px ' + left.toFixed(2) + 'px round ' + (cardR / s).toFixed(2) + 'px)',
     filter: m.filter
@@ -3351,62 +3352,127 @@ function _lbImgFrames(img, p, dir){
 var _lbTrackRaf = 0;
 var _lbDirty = false;
 function _lbMarkDirty(){ _lbDirty = true; }
-['scroll','resize','touchmove','wheel'].forEach(function(n){
-  window.addEventListener(n, _lbMarkDirty, {passive:true, capture:true});
-});
+
 function _lbStopTrack(){
   if(_lbTrackRaf){ cancelAnimationFrame(_lbTrackRaf); _lbTrackRaf = 0; }
   _lbWinCache = null; _lbBoxCache = null;
 }
 window.addEventListener('resize', function(){ _lbWinCache = null; _lbBoxCache = null; }, {passive:true});
-function _lbTrack(anim, t, b, dir){
-  _lbStopTrack();
-  if(!(anim && anim.effect && anim.effect.setKeyframes)) return;
-  var img  = document.getElementById('lbImg');
-  var meta = _lbMeta(t);                                   // ① 静态样式只读一次
-  // ② 飞行期间不变的矩形只量一次（_lbStopTrack 时清掉）
-  _lbWinCache = null;
+/* ══ 逐帧驱动器（取代 WAAPI + setKeyframes 追踪）══
+   旧方案卡顿的根因：飞行中每帧 setKeyframes 都会让浏览器丢弃并重建动画，
+   #lbImg（transform+clip-path）和 #lbImgBox（clip-path）是两个独立动画、各自重建，
+   常常落在不同帧上 → 图片和遮挡窗互相错位、抖动；合成器上的 transform 动画也被反复重启。
+   现在：只有一个 rAF 循环，每帧「先读（缩略图位置）→ 后写（img 与 box 的样式）」，
+   两层永远同帧更新，不再重建任何动画对象；进度由 JS 用同一条 cubic-bezier 缓动算出，视觉节奏不变。
+   返回一个「类动画」句柄（playState / onfinish / cancel），与原有收尾逻辑完全兼容。 */
+var _lbEaseFn = (function(){            // cubic-bezier(.32,.72,0,1)
+  var x1 = .32, y1 = .72, x2 = 0, y2 = 1;
+  function bez(t, a, b){ var u = 1 - t; return 3*u*u*t*a + 3*u*t*t*b + t*t*t; }
+  return function(x){
+    if(x <= 0) return 0; if(x >= 1) return 1;
+    var lo = 0, hi = 1, t = x;
+    for(var i = 0; i < 24; i++){
+      t = (lo + hi) / 2;
+      var bx = bez(t, x1, x2);
+      if(Math.abs(bx - x) < 1e-5) break;
+      if(bx < x) lo = t; else hi = t;
+    }
+    return bez(t, y1, y2);
+  };
+})();
+function _lbLerp(a, b, k){ return a + (b - a) * k; }
+function _lbDrive(img, t, b, dir, dur){
+  var box  = document.getElementById('lbImgBox');
+  var meta = _lbMeta(t);                              // 静态样式只读一次
+  // 飞行期间不变的矩形：只量一次
   var m0 = document.querySelector('.main').getBoundingClientRect(), tb0 = document.querySelector('.topbar').getBoundingClientRect();
   _lbWinCache = {
     left: Math.max(m0.left, 0), right: Math.min(m0.right, window.innerWidth),
     top: Math.max(m0.top, tb0.bottom, 0), bottom: Math.min(m0.bottom, window.innerHeight)
   };
-  _lbBoxCache = document.getElementById('lbImgBox').getBoundingClientRect();
+  var w  = _lbWinCache;
+  var bx = box.getBoundingClientRect();
+  _lbBoxCache = bx;
+  var VW = window.innerWidth, VH = window.innerHeight;
 
-  // ③ 滚动延迟补偿：合成器线程滚动，主线程读到的 rect 总是慢 1~2 帧（这就是「跟不上」的根源）。
-  //    用最近两次采样估算速度，把目标沿速度方向前推约一帧半，落点就和屏幕上真实的缩略图对齐。
-  var LEAD_MS = 24, LEAD_MAX = 60;
-  var prev = null, lastKey = '';
-  function keyOf(a){ return [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 2); }).join(','); }
-  lastKey = keyOf(_lbThumbRect(t, b));                     // 起飞那一帧的关键帧已是最新，不重复设置
-  _lbDirty = false;
-  (function tick(now){
-    _lbTrackRaf = 0;
-    if(_lbAnim !== anim) return;
-    var st = anim.playState;
-    if(st === 'finished' || st === 'idle') return;
-    _lbTrackRaf = requestAnimationFrame(tick);             // 先排下一帧，后面哪怕抛错也不会中断追踪
+  // 终点（灯箱位）姿态：灯箱里放大/平移过时取当时的 transform
+  var F = { tx: 0, ty: 0, s: 1, r: parseFloat(getComputedStyle(img).borderRadius) || 10 };
+  if(_lbFromTf){ try{ var mx = new DOMMatrix(_lbFromTf); F.tx = mx.e; F.ty = mx.f; F.s = mx.a || 1; }catch(e){} }
 
+  var prevTr = img.style.transition;
+  img.style.transition = 'none';                       // 防止残留的 CSS transition 把每帧写入再平滑一遍（=额外延迟）
+
+  var h = { playState: 'running', onfinish: null, effect: null, _raf: 0, _dead: false };
+  h.cancel = function(){
+    if(h._dead) return; h._dead = true;
+    if(h._raf){ cancelAnimationFrame(h._raf); h._raf = 0; }
+    h.playState = 'idle';
+    img.style.transform = ''; img.style.clipPath = ''; img.style.filter = ''; img.style.transition = prevTr;
+    box.style.clipPath = '';
+    _lbWinCache = null; _lbBoxCache = null;
+  };
+
+  // 滚动延迟补偿：合成器线程滚动，主线程读到的位置总慢 1~2 帧 → 沿速度方向前推
+  var LEAD_MS = 22, LEAD_MAX = 56;
+  var prev = null, vx = 0, vy = 0, t0 = 0;
+
+  function frame(now){
+    h._raf = 0;
+    if(h._dead) return;
+    if(!t0) t0 = now;
+    var p = Math.min(1, Math.max(0, (now - t0) / dur));
+    var u = dir === 'in' ? _lbEaseFn(p) : 1 - _lbEaseFn(p);     // 0 = 缩略图位，1 = 灯箱位
+
+    // ── 读 ──
     var a = _lbThumbRect(t, b);
-    var ax = a.left, ay = a.top;
     if(prev && now > prev.t){
       var dt = Math.min(now - prev.t, 50);
-      var vx = (ax - prev.x) / dt, vy = (ay - prev.y) / dt;   // px/ms
-      var lx = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vx * LEAD_MS));
-      var ly = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vy * LEAD_MS));
-      if(lx || ly){
-        a = { left: a.left + lx, top: a.top + ly, right: a.right + lx, bottom: a.bottom + ly, width: a.width, height: a.height };
-      }
+      vx = vx * .5 + ((a.left - prev.x) / dt) * .5;
+      vy = vy * .5 + ((a.top  - prev.y) / dt) * .5;
     }
-    prev = { x: ax, y: ay, t: now };
-    var key = keyOf(a);
-    if(key === lastKey) return;                            // 没动就不碰动画
-    lastKey = key;
-    try{
-      anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b, a, meta), dir));
-      if(_lbAnimBox && _lbAnimBox.effect) _lbAnimBox.effect.setKeyframes(_lbBoxFrames(a, dir));
-    }catch(e){}
-  })(performance.now());
+    prev = { x: a.left, y: a.top, t: now };
+    var lx = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vx * LEAD_MS));
+    var ly = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vy * LEAD_MS));
+    if(Math.abs(lx) < .3) lx = 0; if(Math.abs(ly) < .3) ly = 0;
+    if(lx || ly) a = { left: a.left + lx, top: a.top + ly, right: a.right + lx, bottom: a.bottom + ly, width: a.width, height: a.height };
+
+    // ── 算 ──
+    var P = _lbPose(t, b, a, meta);
+    var d = Math.hypot(P.tx, P.ty) || 1, nx = -P.ty / d, ny = P.tx / d;       // 弧线中点（同 _lbMidTransform）
+    if(ny > 0){ nx = -nx; ny = -ny; }
+    var hh = Math.min(d * _LB_ARC_K, _LB_ARC_MAX);
+    var M = { tx: P.tx * .5 + nx * hh, ty: P.ty * .5 + ny * hh, s: P.s + (1 - P.s) * _LB_MID_GROW };
+    var A, B, k;
+    if(u <= .5){ A = P; B = M; k = u * 2; } else { A = M; B = F; k = (u - .5) * 2; }
+    var tx = _lbLerp(A.tx, B.tx, k), ty = _lbLerp(A.ty, B.ty, k), sc = _lbLerp(A.s, B.s, k);
+    var c0 = P.ci, r = _lbLerp(P.cr, F.r, u);
+    var clip = 'inset(' + _lbLerp(c0[0], 0, u).toFixed(2) + 'px ' + _lbLerp(c0[1], 0, u).toFixed(2) + 'px ' +
+               _lbLerp(c0[2], 0, u).toFixed(2) + 'px ' + _lbLerp(c0[3], 0, u).toFixed(2) + 'px round ' + r.toFixed(2) + 'px)';
+
+    // 外层遮挡窗：可见矩形 ⇄ 整个视口
+    function cl(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
+    var vl = cl(a.left, w.left, w.right), vr = cl(a.right, w.left, w.right),
+        vt = cl(a.top, w.top, w.bottom),  vb = cl(a.bottom, w.top, w.bottom);
+    var s0 = [vt - bx.top, bx.right - vr, bx.bottom - vb, vl - bx.left];
+    var f0 = [-bx.top, bx.right - VW, bx.bottom - VH, -bx.left];
+    var boxClip = 'inset(' + [0,1,2,3].map(function(i){ return _lbLerp(s0[i], f0[i], u).toFixed(1) + 'px'; }).join(' ') + ')';
+
+    // ── 写（img 与 box 同帧、一次写完）──
+    img.style.transform = 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
+    img.style.clipPath  = clip;
+    img.style.filter    = (u < .999 && meta.filter !== 'none') ? meta.filter : '';
+    box.style.clipPath  = boxClip;
+
+    if(p >= 1){
+      h.playState = 'finished';
+      var f = h.onfinish; if(f) f.call(h);
+      return;
+    }
+    h._raf = requestAnimationFrame(frame);
+  }
+  frame(performance.now());          // 第一帧同步写入（等价于原来的 fill:'backwards'，不会闪一下终态）
+  if(!h._dead && h.playState === 'running' && !h._raf) h._raf = requestAnimationFrame(frame);
+  return h;
 }
 // 打开：缩略图原位 → 灯箱位置（缩略图在哪都飞：半遮住 / 滚走了 / 在别的 tab / 不存在）
 function _lbFlyIn(idx, tok){
@@ -3429,10 +3495,8 @@ function _lbFlyIn(idx, tok){
   img.style.opacity = '';
   _lbCancelAnim();
   _lbFlyState(true);
-  _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(a, 'in'),
-    { duration: 520, easing: _LB_EASE, fill: 'backwards' });   // 起点：只露出缩略图可见的那一块
-  var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
-  _lbAnim = anim;
+  var anim = _lbDrive(img, t, b, 'in', 520);    // 逐帧驱动：img + 遮挡窗同帧更新，实时跟随缩略图
+  _lbAnimBox = anim; _lbAnim = anim;
   anim.onfinish = function(){
     _lbStopTrack();
     if(_lbAnim === anim){
@@ -3444,7 +3508,6 @@ function _lbFlyIn(idx, tok){
       img.style.opacity = '';
     }
   };
-  _lbTrack(anim, t, b, 'in');
   _lbShowSide(tok, 300);
 }
 // 关闭：灯箱位置 → 缩略图原位。返回动画时长（0 = 没有飞，只淡出）
@@ -3467,11 +3530,8 @@ function _lbFlyOut(){
       var p = _lbPose(t, b, a);
       _lbFromTf = curTf || '';
       _lbFlyState(true);
-      _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(a, 'out'),
-        { duration: 460, easing: _LB_EASE, fill: 'forwards' });   // 终点：收进缩略图可见的那一块（钻回 tab 栏下面）
-      var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
-      _lbAnim = anim;
-      _lbTrack(anim, t, b, 'out');
+      var anim = _lbDrive(img, t, b, 'out', 460);   // 逐帧驱动：终点每帧重新瞄准此刻的缩略图
+      _lbAnimBox = anim; _lbAnim = anim;
       anim.onfinish = function(){
         _lbStopTrack();
         if(_lbAnim !== anim) return;
