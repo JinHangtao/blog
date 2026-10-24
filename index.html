@@ -1753,21 +1753,26 @@ button, a, input, label, [onclick], video {
    雾面与卡片同色（--card2），交接处没有色差；静止不动，不做呼吸，避免暗部 1~2 级灰跳变。 */
 .pi-slot{isolation:isolate;}
 .pi-slot.pi-load{background:transparent!important;border-color:transparent!important;}
-.pi-skel{position:absolute;inset:6px;z-index:-1;pointer-events:none;
+.pi-skel{position:absolute;inset:0;z-index:-1;pointer-events:none;
   border-radius:inherit;background:var(--card2);
-  filter:blur(10px);
-  transition:opacity .8s var(--pi-out);}
-.pi-skel.pi-out{opacity:0;}
-.sb-av .pi-skel,.mob-av .pi-skel{inset:3px;filter:blur(5px);}
+  transform:scale(.985);
+  filter:blur(3px);
+  transition:transform .95s var(--pi-ios),
+             filter .95s var(--pi-ios),
+             opacity .55s cubic-bezier(.37,0,.63,1) .5s;}
+/* 图片到来：雾面“长”回卡片的完整边界并变清晰，随后才淡出 —— 与图片边缘、底色、描边同一时间线收拢 */
+.pi-skel.pi-out{transform:scale(1);filter:blur(0);opacity:0;}
+.sb-av .pi-skel,.mob-av .pi-skel{transform:scale(.97);filter:blur(2px);}
+.sb-av .pi-skel.pi-out,.mob-av .pi-skel.pi-out{transform:scale(1);filter:blur(0);}
 @media(prefers-reduced-motion:reduce){.pi-skel{transition-duration:.01s}}
 
 img.pi[data-pi]{
   opacity:0!important;
   transform:scale(1.02)!important;
-  filter:blur(4px) var(--pi-f,brightness(1))!important;
-  transition:opacity .9s var(--pi-out),
+  filter:blur(3px) var(--pi-f,brightness(1))!important;
+  transition:opacity .95s var(--pi-ios),
              transform 1.4s var(--pi-ios),
-             filter .8s var(--pi-ios)!important;
+             filter .95s var(--pi-ios)!important;
   will-change:opacity,transform,filter;
   backface-visibility:hidden;
 }
@@ -5733,12 +5738,12 @@ document.addEventListener('keydown', e => {
           img.addEventListener('transitionend',onEnd);
           // 槽位底色/描边淡回：在现有 transition 列表后追加，不破坏卡片原有的透明度/位移过渡
           var tr=getComputedStyle(slot).transition;
-          slot.style.transition=(tr&&tr.indexOf('all')!==0?tr+', ':'')+'background-color .8s cubic-bezier(.22,1,.36,1), border-color .8s cubic-bezier(.22,1,.36,1)';
+          slot.style.transition=(tr&&tr.indexOf('all')!==0?tr+', ':'')+'background-color .95s cubic-bezier(.32,.72,0,1), border-color .95s cubic-bezier(.32,.72,0,1)';
           slot.classList.remove('pi-load');
           img.classList.add('pi-in');
           skel.classList.add('pi-out');
           if(wrapped) slot.classList.add('pi-ready');
-          setTimeout(finish,1700);
+          setTimeout(finish,1800);
         }); });
       });
     }
