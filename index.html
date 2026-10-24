@@ -789,7 +789,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* ══ LIGHTBOX ══ */
 /* 灯箱容器本身不再整体淡入淡出（否则飞行中的图片会半透明）；
    只淡背景，图片由 FLIP 飞行动画接管。visibility 延迟 .5s 隐藏，等飞回动画播完。 */
-.lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .36s;}
+.lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .6s;}
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
 .lb.on .lb-img img{visibility:visible;will-change:transform,clip-path;}
 .lb.lb-flying .lb-img img{box-shadow:none !important;will-change:transform,clip-path;backface-visibility:hidden;}
@@ -3612,15 +3612,39 @@ function _lbFlyOut(){
         if(_lbAnim !== anim) return;
         _lbAnim = null;
         _lbFlyState(false);
-        _lbRestoreThumb();            // 缩略图先现形
-        img.style.opacity = '0';      // 灯箱图同帧消失，不会出现"两张图"
-        img.classList.remove('lb-fadein');   // 双保险：别让 CSS 动画把 opacity 顶回 1
-        img.style.visibility = 'hidden';     // 到 closeLb 的收尾定时器前彻底不可见
-        try{ anim.cancel(); }catch(e){}
-        if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
-        _lbFromTf = '';
+        /* ── 丝滑落地（修复 tab 栏磨砂区闪一下）──
+           旧：落地同一帧「缩略图瞬间现形 + 飞行图瞬间消失」。缩略图被 tab 栏遮住的那一截此刻才第一次出现在
+           磨砂层(backdrop-filter)后面，且若缩略图正处于 hover / 滤镜过渡中，色调还和飞行图不一致 → 肉眼可见一闪。
+           新：① 落地前把缩略图滤镜钉死成「静止态」(与飞行图终点完全相同)，并关掉它的 filter 过渡；
+               ② 缩略图在飞行图【下方】淡入(opacity 0→1)，磨砂层看到的是渐变而不是突变；
+               ③ 淡入完成后再撤掉飞行图，最后把缩略图滤镜放回 CSS 控制（hover 则 .4s 平滑过渡）。 */
+        var th = _lbThumb, FADE = 200;
+        var restF = 'none';
+        if(th){
+          var tm = _lbMeta(th);
+          restF = tm.rest || tm.filter || 'none';
+          th.style.setProperty('transition', 'filter 0s', 'important');
+          th.style.setProperty('filter', restF, 'important');
+          _lbRestoreThumb();                         // visibility 还原（此时仍被飞行图盖住）
+          try{
+            th.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE, easing: 'cubic-bezier(.4,0,.2,1)' });
+          }catch(e){}
+        }
+        setTimeout(function(){
+          if(anim.playState === 'idle') return;      // 期间被取消（又打开了灯箱 / 收尾定时器已清理）
+          img.style.opacity = '0';                   // 飞行图此刻才消失，下面是已完全不透明的缩略图
+          img.classList.remove('lb-fadein');
+          img.style.visibility = 'hidden';
+          try{ anim.cancel(); }catch(e){}
+          if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
+          _lbFromTf = '';
+          if(th){                                    // 滤镜交还给 CSS：静止态无变化；仍在 hover 时 .4s 平滑过渡
+            th.style.removeProperty('transition');
+            th.style.removeProperty('filter');
+          }
+        }, FADE);
       };
-      return 340;   // 飞行 300ms + 余量，灯箱收尾不再多等
+      return 300 + 200 + 60;   // 飞行 300ms + 缩略图淡入 200ms + 余量
     }
     if(curTf) img.style.transform = curTf;
   }
