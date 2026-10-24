@@ -1650,17 +1650,46 @@ button, a, input, label, [onclick], video {
   .jh-toast-msg{ font-size:.85rem; }
 }
 
-/* ══ Image loading — X-style: flat neutral placeholder, one quiet fade-in ══ */
+/* ══ Image loading — iOS / X 风：静态底色轻呼吸，图片 blur-up + 微缩放落定 ══ */
+/* 各类图片原有的基础滤镜，供加载态叠加 blur 后无缝衔接 */
+.gi img,.gi1 img{--pi-f:brightness(.82) saturate(.68) contrast(1.05);}
+.blog-cover-img{--pi-f:brightness(.88) saturate(.72);}
+
 .pi-skel{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:inherit;
-  background:rgba(255,255,255,.045);
-  transition:opacity .4s cubic-bezier(.25,.1,.25,1);}
+  background:rgba(255,255,255,.03);
+  transition:opacity .55s cubic-bezier(.22,.61,.36,1);}
+.pi-skel::before{content:'';position:absolute;inset:0;border-radius:inherit;
+  background:rgba(255,255,255,.05);
+  opacity:0;animation:piBreath 1.9s cubic-bezier(.45,0,.55,1) .15s infinite;}
 .pi-skel.pi-out{opacity:0;}
+@keyframes piBreath{0%,100%{opacity:0}50%{opacity:1}}
+
 .pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;}
 .pi-wrap:not(.pi-ready){min-height:150px;}
-img.pi[data-pi]{opacity:0!important;transition:opacity .4s cubic-bezier(.25,.1,.25,1)!important;}
-img.pi[data-pi].pi-in{opacity:1!important;}
+
+img.pi[data-pi]{
+  opacity:0!important;
+  transform:scale(1.04)!important;
+  filter:blur(14px) var(--pi-f,brightness(1))!important;
+  transition:opacity .7s cubic-bezier(.22,.61,.36,1),
+             transform .9s cubic-bezier(.22,.61,.36,1),
+             filter .7s cubic-bezier(.22,.61,.36,1)!important;
+  will-change:opacity,transform,filter;
+}
+img.pi[data-pi].pi-in{
+  opacity:1!important;
+  transform:scale(1)!important;
+  filter:blur(0) var(--pi-f,brightness(1))!important;
+}
+/* 头像这类小图，blur 减轻 */
+.sb-av img.pi[data-pi],.mob-av img.pi[data-pi]{filter:blur(6px)!important;transform:scale(1.02)!important;}
+.sb-av img.pi[data-pi].pi-in,.mob-av img.pi[data-pi].pi-in{filter:blur(0)!important;transform:scale(1)!important;}
+
 @media (prefers-reduced-motion:reduce){
-  .pi-skel,img.pi[data-pi]{transition-duration:.01s!important}
+  .pi-skel::before{animation:none}
+  img.pi[data-pi]{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .01s!important}
+  img.pi[data-pi].pi-in{filter:var(--pi-f,none)!important}
+  .pi-skel{transition-duration:.01s!important}
 }
 /* Lightbox: plain fade, thin neutral ring */
 .lb-img img.lb-fadein{animation:lbFadeIn .35s cubic-bezier(.25,.1,.25,1) forwards;}
@@ -5294,7 +5323,7 @@ document.addEventListener('keydown', e => {
           // hand control back to the page's original CSS (hover filters etc.)
           img.classList.remove('pi','pi-in');
           if(skel.parentNode) skel.parentNode.removeChild(skel);
-        }, 450);
+        }, 1000);
       }); });
     }
     function ready(){ if(img.decode){ img.decode().then(reveal,reveal); } else reveal(); }
