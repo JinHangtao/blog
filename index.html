@@ -1728,71 +1728,84 @@ button, a, input, label, [onclick], video {
   .jh-toast-msg{ font-size:.85rem; }
 }
 
-/* ══ Image loading v3 — 静态磨砂玻璃 · 同步呼吸 · 对焦落定 ══
-   克制是 iOS 的核心：
-   ① 占位不再有任何漂移的光斑，只是一块安静的磨砂玻璃：顶部受光、四周柔和下沉
-   ② 唯一的动态是“整块亮度的缓慢呼吸”，且全页所有占位共用同一个时钟，同相位呼吸，整齐、安静、耐看
-   ③ 图片落定：温和的虚化 → 清晰（只做 blur + 极轻微放大 + 淡入），占位同时交叠淡出 */
+/* ══ Image loading v4 — Blur-up（Medium / Instagram / Next.js / ThumbHash 通行做法）══
+   ① 占位 = 这张图自己的“无色微缩虚化版”（data-lqip，约 300 字节的灰度缩略图），不是通用灰块
+      → 一眼就能看出画面的明暗与构图，所以耐看；原图到达时，灰度“长出颜色”
+   ② 没有 data-lqip 的图（如动态博客封面）退回一块安静的磨砂玻璃，同步呼吸，并保证最短显示 350ms
+   ③ 落定：强 ease-out（Emil Kowalski 推荐曲线）+ 轻微放大回正 + 虚化收拢，占位在下方慢慢淡出 */
+.gi,.gi1{--pi-f:brightness(.82) saturate(.68) contrast(1.05);}
 .gi img,.gi1 img{--pi-f:brightness(.82) saturate(.68) contrast(1.05);}
-.blog-cover-img{--pi-f:brightness(.88) saturate(.72);}
+.blog-cover-img,.pi-wrap{--pi-f:brightness(.88) saturate(.72);}
 
 :root{
-  --pi-ease:cubic-bezier(.32,.72,0,1);     /* iOS 系统缓动：起步利落、收尾极长 */
-  --pi-sine:cubic-bezier(.37,0,.63,1);     /* 呼吸：折返点速度趋近 0，没有节拍感 */
+  --pi-out:cubic-bezier(.23,1,.32,1);   /* 强 ease-out：起步即响应，收尾极长 */
+  --pi-ease:cubic-bezier(.32,.72,0,1);  /* iOS 系统缓动 */
+  --pi-sine:cubic-bezier(.37,0,.63,1);  /* 呼吸 */
 }
 
-.pi-skel{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:inherit;overflow:hidden;
-  contain:paint;
-  /* 纯中性（只有白/黑的透明度）。颗粒做抖动，防止低透明度渐变出现色阶断层 */
+/* 让占位垫在图片下方、卡片背景上方，不依赖图片自身的定位方式 */
+.pi-slot{isolation:isolate;}
+.pi-skel{position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;overflow:hidden;contain:paint;
+  animation:piSkelIn .7s var(--pi-out) backwards;
+  transition:opacity .9s var(--pi-sine) .45s;}
+.pi-skel.pi-out{opacity:0;}
+@keyframes piSkelIn{from{opacity:0;}}
+
+/* —— 有微缩图：虚化后的无色缩略图，与最终图同样的明暗滤镜，交叠时无色差/亮度跳变 —— */
+.pi-lq{position:absolute;inset:-5%;background-repeat:no-repeat;background-size:cover;background-position:center;
+  filter:blur(14px) var(--pi-f,brightness(.9));
+  transform:scale(1.04);}
+@media(hover:none){.pi-lq{filter:blur(10px) var(--pi-f,brightness(.9));}}
+/* 极轻的亮度呼吸（只改一层白色的透明度，全页同相位） */
+.pi-skel::after{content:'';position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;
+  animation:piLum 3.6s var(--pi-sine) infinite alternate;animation-delay:var(--pi-d,0s);will-change:opacity;}
+@keyframes piLum{from{opacity:0;}to{opacity:.06;}}
+
+/* —— 没有微缩图：磨砂玻璃（安静、同步呼吸）—— */
+.pi-skel.pi-plain{
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     linear-gradient(180deg,rgba(255,255,255,.090) 0%,rgba(255,255,255,.058) 50%,rgba(255,255,255,.074) 100%);
-  /* 玻璃边：顶部一道极细高光 + 内圈细描边 + 四周柔和下沉（像毛玻璃的厚度） */
-  box-shadow:inset 0 .5px 0 rgba(255,255,255,.18),
-             inset 0 0 0 .5px rgba(255,255,255,.055),
-             inset 0 0 56px rgba(0,0,0,.20);
-  transition:opacity 1.15s var(--pi-ease) .08s;}
-.pi-skel.pi-out{opacity:0;}
-
-/* 受光层：顶部中央一大片极柔的漫射光（多级渐变近似高斯，没有边界）。
-   整块位置不动，只让亮度慢慢起伏。所有占位共用同一个时钟（见 JS），同步呼吸。 */
-.pi-skel::before{content:'';position:absolute;inset:0;pointer-events:none;will-change:opacity;
+  box-shadow:inset 0 .5px 0 rgba(255,255,255,.18),inset 0 0 0 .5px rgba(255,255,255,.055),inset 0 0 56px rgba(0,0,0,.20);}
+.pi-skel.pi-plain::after{display:none;}
+.pi-skel.pi-plain::before{content:'';position:absolute;inset:0;pointer-events:none;will-change:opacity;
   background:radial-gradient(ellipse 130% 85% at 50% 0%,
     rgba(255,255,255,.115) 0%,rgba(255,255,255,.100) 14%,rgba(255,255,255,.080) 28%,
     rgba(255,255,255,.058) 42%,rgba(255,255,255,.037) 56%,rgba(255,255,255,.019) 70%,
     rgba(255,255,255,.007) 85%,rgba(255,255,255,0) 100%);
-  animation:piBreath 3.6s var(--pi-sine) infinite alternate;
-  animation-delay:var(--pi-d,0s);}
+  animation:piBreath 3.6s var(--pi-sine) infinite alternate;animation-delay:var(--pi-d,0s);}
 @keyframes piBreath{from{opacity:.2;}to{opacity:1;}}
 
 .pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;}
 .pi-wrap:not(.pi-ready){min-height:150px;}
 
-/* 图片：温和虚化 → 对焦。位移只有 2.5%，不抢戏；透明度先于虚化收拢，先浮出轮廓再拉清细节 */
+/* —— 原图：从微虚化+微放大“对焦”落定。透明度、虚化、缩放三条曲线错开收尾，更像镜头 —— */
 img.pi[data-pi]{
   opacity:0!important;
-  transform:scale(1.025)!important;
-  filter:blur(16px) var(--pi-f,brightness(1))!important;
-  transition:opacity .9s var(--pi-ease),
-             transform 1.4s var(--pi-ease),
-             filter 1.2s var(--pi-ease)!important;
+  transform:scale(1.03)!important;
+  filter:blur(12px) var(--pi-f,brightness(1))!important;
+  transition:opacity .7s var(--pi-out),
+             transform 1.3s var(--pi-out),
+             filter 1s var(--pi-ease)!important;
   will-change:opacity,transform,filter;
 }
-@media(hover:none){img.pi[data-pi]{filter:blur(10px) var(--pi-f,brightness(1))!important;}}
+@media(hover:none){img.pi[data-pi]{filter:blur(8px) var(--pi-f,brightness(1))!important;}}
 img.pi[data-pi].pi-in{
   opacity:1!important;
   transform:scale(1)!important;
   filter:blur(0) var(--pi-f,brightness(1))!important;
 }
+/* 缓存命中的图：不走占位，只做一次短而干净的淡入 */
+img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .45s var(--pi-out)!important;}
 /* 头像等小图：更轻 */
-.sb-av img.pi[data-pi],.mob-av img.pi[data-pi]{filter:blur(5px)!important;transform:scale(1.015)!important;}
+.sb-av img.pi[data-pi],.mob-av img.pi[data-pi]{filter:blur(4px)!important;transform:scale(1.015)!important;}
 .sb-av img.pi[data-pi].pi-in,.mob-av img.pi[data-pi].pi-in{filter:blur(0)!important;transform:scale(1)!important;}
 
 @media (prefers-reduced-motion:reduce){
-  .pi-skel::before{animation:none!important;opacity:.7}
+  .pi-skel::before,.pi-skel::after{animation:none!important}
   img.pi[data-pi]{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .01s!important}
   img.pi[data-pi].pi-in{filter:var(--pi-f,none)!important}
-  .pi-skel{transition-duration:.01s!important}
+  .pi-skel{transition-duration:.01s!important;animation:none!important}
 }
 /* Lightbox: plain fade, thin neutral ring */
 .lb-img img.lb-fadein{animation:lbFadeIn .9s cubic-bezier(.32,.72,0,1) both;}
@@ -5687,12 +5700,11 @@ document.addEventListener('keydown', e => {
 });
 </script>
 <script>
-/* Image loading v3：磨砂占位（全页同相位呼吸）→ 错峰对焦落定 → 交还原 CSS */
+/* Image loading v4：微缩图 blur-up → 错峰对焦落定 → 交还原 CSS */
 (function(){
   var SEL='.gi img,.gi1 img,.sb-av img,.mob-av img,.blog-cover-img';
-  var PERIOD=3.6*2;               // 与 CSS 呼吸周期（alternate 一来一回）一致
+  var PERIOD=3.6*2, MIN_PLAIN=350;
   var lastAt=0;
-  // 多图同时到达时错开 70ms，最多等 280ms
   function stagger(fn){
     var now=performance.now(), at=Math.min(Math.max(now,lastAt+70),now+280);
     lastAt=at; setTimeout(fn,at-now);
@@ -5700,6 +5712,7 @@ document.addEventListener('keydown', e => {
   function bind(img){
     if(img.dataset.pi) return;
     img.dataset.pi='1';
+    var t0=performance.now();
     var slot, wrapped=false;
     if(img.classList.contains('blog-cover-img')){
       slot=document.createElement('div'); slot.className='pi-wrap';
@@ -5708,35 +5721,60 @@ document.addEventListener('keydown', e => {
       slot=img.parentElement;
       if(getComputedStyle(slot).position==='static') slot.style.position='relative';
     }
+
+    // 已在缓存里：不做占位，一次短淡入
+    if(img.complete && img.naturalWidth){
+      img.classList.add('pi','pi-fast');
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        img.classList.add('pi-in');
+        if(wrapped) slot.classList.add('pi-ready');
+        setTimeout(function(){ img.classList.remove('pi','pi-in','pi-fast'); },520);
+      }); });
+      return;
+    }
+
     img.classList.add('pi');
+    slot.classList.add('pi-slot');
 
     var skel=document.createElement('div');
-    skel.className='pi-skel';
-    // 用全局时钟对齐相位：任何时候创建的占位，都和页面上其它占位同步呼吸
+    var lq=img.getAttribute('data-lqip');
+    skel.className='pi-skel'+(lq?'':' pi-plain');
     skel.style.setProperty('--pi-d',(-((performance.now()/1000)%PERIOD)).toFixed(3)+'s');
+    if(lq){
+      var l=document.createElement('div'); l.className='pi-lq';
+      l.style.backgroundImage='url("'+lq+'")';
+      // 与最终图保持同样的裁切方式，交叠时构图不跳
+      var cs=getComputedStyle(img);
+      l.style.backgroundPosition=cs.objectPosition||'center';
+      l.style.backgroundSize=(cs.objectFit==='contain')?'contain':'cover';
+      skel.appendChild(l);
+    }
     slot.insertBefore(skel,slot.firstChild);
 
     var shown=false;
-    function cleanup(){ if(skel.parentNode) skel.parentNode.removeChild(skel); }
+    function cleanup(){
+      if(skel.parentNode) skel.parentNode.removeChild(skel);
+      slot.classList.remove('pi-slot');
+    }
     function reveal(){
       if(shown) return; shown=true;
-      stagger(function(){
+      // 没有微缩图的占位，至少停留 MIN_PLAIN，避免一闪而过
+      var wait=lq?0:Math.max(0,MIN_PLAIN-(performance.now()-t0));
+      setTimeout(function(){ stagger(function(){
         requestAnimationFrame(function(){ requestAnimationFrame(function(){
           img.classList.add('pi-in');
           skel.classList.add('pi-out');
           if(wrapped) slot.classList.add('pi-ready');
           setTimeout(function(){
-            // 把控制权还给页面原有 CSS（hover 滤镜等）
-            img.classList.remove('pi','pi-in');
+            img.classList.remove('pi','pi-in');   // 把控制权还给页面原有 CSS（hover 滤镜等）
             cleanup();
-          },1600);
+          },1700);
         }); });
-      });
+      }); },wait);
     }
     function ready(){ if(img.decode){ img.decode().then(reveal,reveal); } else reveal(); }
     img.addEventListener('load',ready,{once:true});
     img.addEventListener('error',function(){ img.classList.remove('pi'); cleanup(); },{once:true});
-    if(img.complete && img.naturalWidth) ready();
   }
   function scan(n){
     if(!n || n.nodeType!==1) return;
