@@ -1730,41 +1730,54 @@ button, a, input, label, [onclick], video {
 .blog-cover-img{--pi-f:brightness(.88) saturate(.72);}
 
 .pi-skel{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:inherit;overflow:hidden;
-  background:linear-gradient(135deg,rgba(255,255,255,.036),rgba(255,255,255,.02));
-  transition:opacity .9s cubic-bezier(.4,0,.2,1);}
-/* 呼吸：大面积、带暖色的柔和径向光，按正弦采样，亮度变化被空间渐变分摊，不会出现“一档一档”的阶梯感 */
-.pi-skel::after{content:'';position:absolute;inset:0;border-radius:inherit;
-  background:radial-gradient(95% 75% at 50% 42%,rgba(196,154,82,.085) 0%,rgba(196,154,82,.04) 42%,rgba(196,154,82,0) 78%);
-  opacity:.24;will-change:opacity;
-  animation:piGlow 3.8s linear infinite;
+  /* 磨砂底：极淡的斜向明暗 + 静态颗粒（颗粒同时充当抖动，消除暗部低透明度渐变的色阶断层——这是旧版“一档一档卡顿”的真正来源） */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .11 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.016) 55%,rgba(255,255,255,.03));
+  /* 内缘柔化：边框像被雾气吞进去，而不是一刀切的硬边 */
+  box-shadow:inset 0 0 26px 2px rgba(10,9,8,.34);
+  transition:opacity 1.1s cubic-bezier(.4,0,.2,1);}
+/* 呼吸：不再靠“整层明暗闪烁”，而是两团极柔的光在缓慢漂移 + 胀缩（只动 transform/opacity，纯合成层，60fps 不掉帧）。
+   ease-in-out + alternate：每个折返点速度归零，所以没有“顿一下”的节拍感。 */
+.pi-skel::before,.pi-skel::after{content:'';position:absolute;border-radius:50%;will-change:transform,opacity;
+  animation-timing-function:cubic-bezier(.45,0,.55,1);animation-iteration-count:infinite;animation-direction:alternate;
   animation-delay:calc(var(--pi-d,0s) * -1);}
-/* 流光：宽而柔的高光带缓缓扫过，扫完留一段静息 */
-.pi-skel::before{content:'';position:absolute;inset:0;border-radius:inherit;
-  background:linear-gradient(100deg,
-    rgba(255,255,255,0) 0%,rgba(255,255,255,.008) 18%,rgba(255,255,255,.028) 32%,
-    rgba(255,255,255,.055) 44%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.055) 56%,
-    rgba(255,255,255,.028) 68%,rgba(255,255,255,.008) 82%,rgba(255,255,255,0) 100%);
-  transform:translateX(-120%);will-change:transform;
-  animation:piSweep 2.8s cubic-bezier(.45,.05,.25,1) infinite;
-  animation-delay:calc(var(--pi-d,0s) * -1);}
+.pi-skel::before{inset:-24%;
+  background:radial-gradient(closest-side,rgba(196,154,82,.165) 0%,rgba(196,154,82,.135) 20%,rgba(196,154,82,.09) 40%,rgba(196,154,82,.047) 60%,rgba(196,154,82,.016) 80%,rgba(196,154,82,0) 100%);
+  animation-name:piBreathA;animation-duration:5.4s;}
+.pi-skel::after{inset:-8% 4% 10% -30%;
+  background:radial-gradient(closest-side,rgba(255,242,222,.085) 0%,rgba(255,242,222,.065) 22%,rgba(255,242,222,.04) 45%,rgba(255,242,222,.016) 70%,rgba(255,242,222,0) 100%);
+  animation-name:piBreathB;animation-duration:7.2s;}
 .pi-skel.pi-out{opacity:0;}
-.pi-skel.pi-out::before,.pi-skel.pi-out::after{animation-play-state:paused;}
-@keyframes piGlow{0%{opacity:0.240} 6.25%{opacity:0.269} 12.5%{opacity:0.351} 18.75%{opacity:0.475} 25%{opacity:0.620} 31.25%{opacity:0.765} 37.5%{opacity:0.889} 43.75%{opacity:0.971} 50%{opacity:1.000} 56.25%{opacity:0.971} 62.5%{opacity:0.889} 68.75%{opacity:0.765} 75%{opacity:0.620} 81.25%{opacity:0.475} 87.5%{opacity:0.351} 93.75%{opacity:0.269} 100%{opacity:0.240}}
-@keyframes piSweep{
-  0%{transform:translateX(-120%);}
-  64%,100%{transform:translateX(120%);}
+@keyframes piBreathA{
+  from{transform:translate3d(-7%,-5%,0) scale(.84);opacity:.45;}
+  to  {transform:translate3d(6%,5%,0)   scale(1.1); opacity:1;}
 }
+@keyframes piBreathB{
+  from{transform:translate3d(10%,6%,0)  scale(1.06);opacity:.9;}
+  to  {transform:translate3d(-6%,-4%,0) scale(.82); opacity:.35;}
+}
+
+/* 承载框本身微微虚化：加载中带一点雾，图片落定时框一起“对焦”变清晰 */
+.pi-frame{
+  filter:blur(1.6px) saturate(.92);
+  transition:filter 1.15s cubic-bezier(.22,1,.36,1),
+             border-color .15s cubic-bezier(.4,0,.2,1),
+             transform .45s cubic-bezier(.23,.53,.36,.99),
+             box-shadow .45s cubic-bezier(.23,.53,.36,.99)!important;}
+.pi-frame.pi-frame-clear{filter:blur(0px) saturate(1);}
+@media(hover:none){.pi-frame{filter:blur(1.2px) saturate(.92);}}
 
 .pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;}
 .pi-wrap:not(.pi-ready){min-height:150px;}
 
 img.pi[data-pi]{
   opacity:0!important;
-  transform:scale(1.04)!important;
-  filter:blur(14px) var(--pi-f,brightness(1))!important;
-  transition:opacity .7s cubic-bezier(.22,.61,.36,1),
-             transform .9s cubic-bezier(.22,.61,.36,1),
-             filter .7s cubic-bezier(.22,.61,.36,1)!important;
+  transform:scale(1.03)!important;
+  filter:blur(12px) var(--pi-f,brightness(1))!important;
+  transition:opacity .95s cubic-bezier(.22,1,.36,1),
+             transform 1.2s cubic-bezier(.22,1,.36,1),
+             filter 1s cubic-bezier(.22,1,.36,1)!important;
   will-change:opacity,transform,filter;
 }
 img.pi[data-pi].pi-in{
@@ -1777,8 +1790,8 @@ img.pi[data-pi].pi-in{
 .sb-av img.pi[data-pi].pi-in,.mob-av img.pi[data-pi].pi-in{filter:blur(0)!important;transform:scale(1)!important;}
 
 @media (prefers-reduced-motion:reduce){
-  .pi-skel::before{animation:none;transform:translateX(-120%)}
-  .pi-skel::after{animation:none;opacity:.6}
+  .pi-skel::before,.pi-skel::after{animation:none!important;opacity:.7}
+  .pi-frame{filter:none!important}
   img.pi[data-pi]{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .01s!important}
   img.pi[data-pi].pi-in{filter:var(--pi-f,none)!important}
   .pi-skel{transition-duration:.01s!important}
@@ -5691,6 +5704,9 @@ document.addEventListener('keydown', e => {
       if(getComputedStyle(slot).position==='static') slot.style.position='relative';
     }
     img.classList.add('pi');
+    // 承载框微虚化（头像这类小圆图不处理，避免和它自己的入场滤镜冲突）
+    var framed = slot.matches && slot.matches('.gi,.gi1,.pi-wrap');
+    if(framed) slot.classList.add('pi-frame');
     var skel=document.createElement('div');
     skel.className='pi-skel';
     // 每张图的呼吸/流光错开相位，避免整页同频闪动
@@ -5703,18 +5719,21 @@ document.addEventListener('keydown', e => {
       requestAnimationFrame(function(){ requestAnimationFrame(function(){
         img.classList.add('pi-in');
         skel.classList.add('pi-out');
+        if(framed) slot.classList.add('pi-frame-clear');
         if(wrapped) slot.classList.add('pi-ready');
         setTimeout(function(){
           // hand control back to the page's original CSS (hover filters etc.)
           img.classList.remove('pi','pi-in');
+          if(framed) slot.classList.remove('pi-frame','pi-frame-clear');
           if(skel.parentNode) skel.parentNode.removeChild(skel);
-        }, 1000);
+        }, 1350);
       }); });
     }
     function ready(){ if(img.decode){ img.decode().then(reveal,reveal); } else reveal(); }
     img.addEventListener('load',ready,{once:true});
     img.addEventListener('error',function(){
       img.classList.remove('pi');
+      if(framed) slot.classList.remove('pi-frame','pi-frame-clear');
       if(skel.parentNode) skel.parentNode.removeChild(skel);
     },{once:true});
     if(img.complete && img.naturalWidth) ready();
