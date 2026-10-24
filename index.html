@@ -789,7 +789,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* ══ LIGHTBOX ══ */
 /* 灯箱容器本身不再整体淡入淡出（否则飞行中的图片会半透明）；
    只淡背景，图片由 FLIP 飞行动画接管。visibility 延迟 .5s 隐藏，等飞回动画播完。 */
-.lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .6s;}
+.lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .78s;}
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
 .lb.on .lb-img img{visibility:visible;will-change:transform,clip-path;}
 .lb.lb-flying .lb-img img{box-shadow:none !important;will-change:transform,clip-path;backface-visibility:hidden;}
@@ -3611,40 +3611,52 @@ function _lbFlyOut(){
         _lbStopTrack();
         if(_lbAnim !== anim) return;
         _lbAnim = null;
-        _lbFlyState(false);
-        /* ── 丝滑落地（修复 tab 栏磨砂区闪一下）──
-           旧：落地同一帧「缩略图瞬间现形 + 飞行图瞬间消失」。缩略图被 tab 栏遮住的那一截此刻才第一次出现在
-           磨砂层(backdrop-filter)后面，且若缩略图正处于 hover / 滤镜过渡中，色调还和飞行图不一致 → 肉眼可见一闪。
-           新：① 落地前把缩略图滤镜钉死成「静止态」(与飞行图终点完全相同)，并关掉它的 filter 过渡；
-               ② 缩略图在飞行图【下方】淡入(opacity 0→1)，磨砂层看到的是渐变而不是突变；
-               ③ 淡入完成后再撤掉飞行图，最后把缩略图滤镜放回 CSS 控制（hover 则 .4s 平滑过渡）。 */
-        var th = _lbThumb, FADE = 200;
+        /* ── 丝滑落地（三段式交接，修复 tab 栏磨砂区闪烁）──
+           ① 缩略图滤镜钉成静止态（与飞行图终点完全一致），关掉它的 filter 过渡，避免 hover 色差
+           ② 缩略图在飞行图【下方】淡入 —— 被 tab 栏遮住的那一截透过磨砂层是「渐变出现」而不是突变
+           ③ 缩略图已接近不透明后，飞行图再【交叉淡出】，不再一帧硬切
+              （飞行图是高分辨率大图缩放而来，与缩略图的栅格化有亚像素差，硬切会有一次细微「跳」）
+           ④ 整个交接期间保持 _lbFlying=true：滚动模糊 / 标题压缩等主线程任务继续让路，
+              不会在淡入的同时抢帧；交接完成后才恢复 */
+        var th = _lbThumb, IN = 180, OUT = 170, OVERLAP = 60;
         var restF = 'none';
         if(th){
           var tm = _lbMeta(th);
           restF = tm.rest || tm.filter || 'none';
           th.style.setProperty('transition', 'filter 0s', 'important');
           th.style.setProperty('filter', restF, 'important');
+          th.style.willChange = 'opacity';
           _lbRestoreThumb();                         // visibility 还原（此时仍被飞行图盖住）
           try{
-            th.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE, easing: 'cubic-bezier(.4,0,.2,1)' });
+            th.animate([{ opacity: 0 }, { opacity: 1 }], { duration: IN, easing: 'cubic-bezier(.33,0,.2,1)' });
           }catch(e){}
         }
-        setTimeout(function(){
-          if(anim.playState === 'idle') return;      // 期间被取消（又打开了灯箱 / 收尾定时器已清理）
-          img.style.opacity = '0';                   // 飞行图此刻才消失，下面是已完全不透明的缩略图
+        var fadeAnim = null;
+        function _finish(){
+          if(fadeAnim){ try{ fadeAnim.cancel(); }catch(e){} fadeAnim = null; }
+          img.style.opacity = '0';
           img.classList.remove('lb-fadein');
           img.style.visibility = 'hidden';
           try{ anim.cancel(); }catch(e){}
           if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
           _lbFromTf = '';
+          _lbFlyState(false);
           if(th){                                    // 滤镜交还给 CSS：静止态无变化；仍在 hover 时 .4s 平滑过渡
+            th.style.willChange = '';
             th.style.removeProperty('transition');
             th.style.removeProperty('filter');
           }
-        }, FADE);
+        }
+        setTimeout(function(){
+          if(anim.playState === 'idle') return;      // 期间被取消（又打开了灯箱 / 收尾定时器已清理）
+          try{
+            fadeAnim = img.animate([{ opacity: 1 }, { opacity: 0 }],
+                                   { duration: OUT, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' });
+            fadeAnim.onfinish = function(){ if(anim.playState !== 'idle') _finish(); };
+          }catch(e){ _finish(); }
+        }, Math.max(0, IN - OVERLAP));
       };
-      return 300 + 200 + 60;   // 飞行 300ms + 缩略图淡入 200ms + 余量
+      return 300 + (180 - 60) + 170 + 60;   // 飞行 300 + 缩略图淡入先行 120 + 飞行图淡出 170 + 余量
     }
     if(curTf) img.style.transform = curTf;
   }
