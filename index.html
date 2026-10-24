@@ -3314,6 +3314,8 @@ var _lbTail = null;    // 飞回「落地交接」阶段的句柄：{ fade: 灯�
 function _lbCancelTail(){
   var t = _lbTail; if(!t) return; _lbTail = null;
   if(t.timer){ clearTimeout(t.timer); t.timer = 0; }
+  if(t.off){ t.off(); t.off = null; }
+  if(t.thAnim){ try{ t.thAnim.cancel(); }catch(e){} t.thAnim = null; }
   if(t.fade){ var f = t.fade; t.fade = null; f.onfinish = null; try{ f.cancel(); }catch(e){} }
   if(t.th){                                   // 缩略图的临时内联样式还给 CSS
     t.th.style.willChange = '';
@@ -3634,7 +3636,7 @@ function _lbFlyOut(){
            ④ 整个交接期间保持 _lbFlying=true：滚动模糊 / 标题压缩等主线程任务继续让路，
               不会在淡入的同时抢帧；交接完成后才恢复 */
         var th = _lbThumb, IN = 180, OUT = 170, OVERLAP = 60;
-        var tail = _lbTail = { fade: null, th: th, timer: 0 };
+        var tail = _lbTail = { fade: null, th: th, timer: 0, thAnim: null, off: null };
         var restF = 'none';
         if(th){
           var tm = _lbMeta(th);
@@ -3644,13 +3646,16 @@ function _lbFlyOut(){
           th.style.willChange = 'opacity';
           _lbRestoreThumb();                         // visibility 还原（此时仍被飞行图盖住）
           try{
-            th.animate([{ opacity: 0 }, { opacity: 1 }], { duration: IN, easing: 'cubic-bezier(.33,0,.2,1)' });
+            tail.thAnim = th.animate([{ opacity: 0 }, { opacity: 1 }], { duration: IN, easing: 'cubic-bezier(.33,0,.2,1)' });
           }catch(e){}
         }
         var fadeAnim = null;
         function _finish(){
           if(_lbTail !== tail) return;               // 已被新的打开 / 关闭接管，不再收尾
           _lbTail = null;
+          if(tail.timer){ clearTimeout(tail.timer); tail.timer = 0; }
+          if(tail.off){ tail.off(); tail.off = null; }
+          if(tail.thAnim){ try{ tail.thAnim.cancel(); }catch(e){} tail.thAnim = null; }   // 提前收尾：缩略图直接回到完全不透明
           if(fadeAnim){ try{ fadeAnim.cancel(); }catch(e){} fadeAnim = null; }
           img.style.opacity = '0';
           img.classList.remove('lb-fadein');
@@ -3665,6 +3670,21 @@ function _lbFlyOut(){
             th.style.removeProperty('filter');
           }
         }
+        /* 交接期间（~0.3s）飞行图是 position:fixed 的独立图层，不随页面滚动；
+           这时缩略图已经显示出来并会跟着滚走，飞行图却停在原地淡出 → 同一张图出现两份，
+           滚动方向上就是一道很短的「拖影」。所以交接期间只要检测到滚动，立刻收尾：
+           缩略图直接不透明、飞行图马上撤掉，不再有两份图像。 */
+        var _onScr = function(){ _finish(); };
+        window.addEventListener('wheel',     _onScr, { passive: true, capture: true });
+        window.addEventListener('touchmove', _onScr, { passive: true, capture: true });
+        window.addEventListener('scroll',    _onScr, { passive: true, capture: true });
+        window.addEventListener('keydown',   _onScr, { passive: true, capture: true });
+        tail.off = function(){
+          window.removeEventListener('wheel',     _onScr, { capture: true });
+          window.removeEventListener('touchmove', _onScr, { capture: true });
+          window.removeEventListener('scroll',    _onScr, { capture: true });
+          window.removeEventListener('keydown',   _onScr, { capture: true });
+        };
         tail.timer = setTimeout(function(){
           tail.timer = 0;
           if(_lbTail !== tail) return;               // 期间被取消（又打开了灯箱）
