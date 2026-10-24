@@ -718,7 +718,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* ══ LIGHTBOX ══ */
 .lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .32s cubic-bezier(.4,0,.2,1);}
 .lb.on{opacity:1;pointer-events:all}
-.lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);backdrop-filter:blur(24px) saturate(.8);}
+.lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);}
 .lb-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:0;justify-content:center;margin-top:4vh;}
 /* 容器：border-radius + overflow:hidden 在這裡，永遠是圓角 */
 .lb-img{flex-shrink:0;position:relative;line-height:0;}
@@ -2580,6 +2580,7 @@ if(isTouch){
 
   (function tick(){
     requestAnimationFrame(tick);
+    if(window._lbOpen) return;
     target = getTarget();
     // lerp speed: fast when scrolling down, slightly slower coming back up
     var speed = target > cur ? 0.12 : 0.08;
@@ -3173,6 +3174,7 @@ function openLb(idx){
   img.style.opacity = '0';
   side.style.opacity = '0';
   document.getElementById('lb').classList.add('on');
+  window._lbOpen=true;
   document.body.style.overflow = 'hidden';
   lb.addEventListener('touchmove', window._lbTouchMove, {passive:false});
   _lbShow(idx);
@@ -3187,6 +3189,7 @@ function closeLb(){
   if(sideEl) sideEl.style.opacity = '0';
   var lb=document.getElementById('lb');
   lb.classList.remove('on');
+  window._lbOpen=false;
   lb.removeEventListener('touchmove', window._lbTouchMove);
   lb.style.alignItems='';
   lb.style.overflowY='';
@@ -3267,8 +3270,7 @@ document.addEventListener('keydown', function(e){
   lb.addEventListener('touchstart', function(e){
     // 第二根手指落下 / 已放大：放弃切图与下拉手势，并把可能已拖动的 wrap 弹回
     if(e.touches.length>1 || (window._lbScale||1)>1.02){
-      tracking=false; swDir=null;
-      if(dyAcc){ wrap.style.transition='transform 0.3s cubic-bezier(0.22,0.61,0.36,1)'; wrap.style.transform='translateY(0)'; dyAcc=0; }
+      tracking=false; swDir=null; dyAcc=0;
       return;
     }
     sx=e.touches[0].clientX; sy=e.touches[0].clientY;
@@ -3304,27 +3306,43 @@ document.addEventListener('keydown', function(e){
   },{passive:true});
 
  // ── Pinch / pan / double-tap zoom ──
- // 重写版。算法参考 PhotoSwipe v5（锚点缩放公式、pan bounds、PAN_END_FRICTION=.35、双击 300ms）
- // 与 Panzoom（focal-point zoom）。变换统一为 translate3d(tx,ty) scale(s)，origin 固定图片中心。
+ // 算法参考 PhotoSwipe v5（锚点缩放、pan bounds、PAN_END_FRICTION=.35、双击 300ms）与 Panzoom（focal zoom）。
+ // 变换：translate3d(tx,ty) scale(s)，origin 为图片中心。
 (function(){
   var lbImg    = document.getElementById('lbImg');
   var lbImgBox = document.getElementById('lbImgBox');
-  var MIN = 1, RUB = 0.35, DT_DELAY = 300, DT_DIST = 30, ZOOM2 = 2.5;
+  var wrapEl   = document.querySelector('.lb-wrap');
+  var MIN = 1, RUB = 0.35, DT_DELAY = 300, DT_DIST = 30, ZOOM2 = 2.5, DEAD = 6;
 
   var s = 1, tx = 0, ty = 0, maxS = 3;
   var G = null;                 // 手势开始时的几何快照
   var mode = null;              // 'pinch' | 'pan' | null
-  var base = null;              // 手势基准
+  var base = null;
   var lastMid = {x:0, y:0};
-  var anim = 0, samples = [];
+  var anim = 0, pend = 0, samples = [];
   var tap = null, lastTap = {t:0, x:0, y:0};
-  var multi = false;            // 本次触摸序列是否出现过双指
+  var multi = false, zc = false, lastW = window.innerWidth;
 
   window._lbScale = 1;
 
   function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
 
-  // 图片中心(未变换) = 当前 rect 中心 - 当前位移；缩放以中心为原点，所以中心不受 scale 影响
+  // ── 样式写入：手势中合并到每帧最多一次 ──
+  function render(){
+    lbImg.style.transform = (s === 1 && tx === 0 && ty === 0) ? '' :
+      'translate3d(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px,0) scale(' + s.toFixed(4) + ')';
+    window._lbScale = s;
+  }
+  function apply(){ if(pend){ cancelAnimationFrame(pend); pend = 0; } render(); }
+  function schedule(){ if(!pend) pend = requestAnimationFrame(function(){ pend = 0; render(); }); }
+  function flush(){ if(pend){ cancelAnimationFrame(pend); pend = 0; render(); } }
+
+  // lb-zoomed（去阴影、锁滚动）只在手势开始/结束时切换，避免手势中途触发重绘
+  function setZoomClass(on){ if(on !== zc){ zc = on; lb.classList.toggle('lb-zoomed', on); } }
+  function end(){ lbImg.style.willChange = ''; if(s <= 1.02) setZoomClass(false); }
+  function stop(){ if(anim){ cancelAnimationFrame(anim); anim = 0; } }
+
+  // 图片中心(未变换) = 当前 rect 中心 - 当前位移；以中心为原点缩放，中心不受 scale 影响
   function geom(){
     var r = lbImg.getBoundingClientRect();
     var W = lbImg.offsetWidth, H = lbImg.offsetHeight;
@@ -3334,17 +3352,30 @@ document.addEventListener('keydown', function(e){
              vw:lb.clientWidth || window.innerWidth, vh:lb.clientHeight || window.innerHeight };
   }
 
-  // 位移边界：图比屏幕大 → 贴边；图比屏幕小 → 锁在 0（居中）
+  // 单轴位移边界。关键：必须随缩放连续变化，否则跨过"图=屏幕"那一刻会瞬移。
+  //  图 > 视口：贴边区间；图 < 视口：锁定点，从布局位置(0)按放大进度平滑过渡到视口居中，
+  //  在 图==视口 时与贴边区间退化成同一个点，因此连续。
+  function axis(size, view, c, sc){
+    var L = size * sc;
+    if(L > view) return [view - c - L/2, L/2 - c];
+    var k = size < view ? (L - size) / (view - size) : 1;
+    k = k < 0 ? 0 : (k > 1 ? 1 : k);
+    var v = (view/2 - c) * k;
+    return [v, v];
+  }
   function lim(sc){
-    var w = G.W*sc, h = G.H*sc;
-    return {
-      x0: w > G.vw ? G.vw - G.cx - w/2 : 0,  x1: w > G.vw ? w/2 - G.cx : 0,
-      y0: h > G.vh ? G.vh - G.cy - h/2 : 0,  y1: h > G.vh ? h/2 - G.cy : 0
-    };
+    var X = axis(G.W, G.vw, G.cx, sc), Y = axis(G.H, G.vh, G.cy, sc);
+    return { x0:X[0], x1:X[1], y0:Y[0], y1:Y[1] };
   }
   function fit(v, a, b, soft){
     if(v < a) return soft ? a + (v-a)*RUB : a;
     if(v > b) return soft ? b + (v-b)*RUB : b;
+    return v;
+  }
+  // 橡皮筋状态的位移还原成"未压缩"值，重建基准时避免二次压缩而抖动
+  function unfit(v, a, b){
+    if(v < a) return a + (v-a)/RUB;
+    if(v > b) return b + (v-b)/RUB;
     return v;
   }
   // 让屏幕点 (mx,my) 下的内容在缩放到 S 后仍在原处
@@ -3353,18 +3384,24 @@ document.addEventListener('keydown', function(e){
     return { x:(mx-G.cx) - k*(mx-G.cx-fromX), y:(my-G.cy) - k*(my-G.cy-fromY) };
   }
 
-  function apply(){
-    lbImg.style.transformOrigin = '50% 50%';
-    lbImg.style.transform = (s === 1 && tx === 0 && ty === 0) ? '' :
-      'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + s + ')';
-    window._lbScale = s;
-    lb.classList.toggle('lb-zoomed', s > 1.02);
+  // 灯箱下拉手势会给 .lb-wrap 加 translateY 并带回弹动画。开始缩放时把它瞬间归零，
+  // 同时把差值并入 tx/ty，画面视觉不动，之后几何不再漂移。
+  function snapWrap(){
+    if(!wrapEl) return;
+    var cs = getComputedStyle(wrapEl).transform;
+    if(!cs || cs === 'none' || cs === 'matrix(1, 0, 0, 1, 0, 0)') return;
+    var r0 = lbImg.getBoundingClientRect();
+    wrapEl.style.transition = 'none';
+    wrapEl.style.transform = '';
+    var r1 = lbImg.getBoundingClientRect();
+    tx += (r0.left + r0.width/2) - (r1.left + r1.width/2);
+    ty += (r0.top + r0.height/2) - (r1.top + r1.height/2);
+    render();
   }
-  function end(){ lbImg.style.willChange = ''; }
-  function stop(){ if(anim){ cancelAnimationFrame(anim); anim = 0; } }
 
   function tweenTo(S, X, Y, dur){
     stop();
+    if(S > 1.02 || s > 1.02) setZoomClass(true);
     var s0 = s, x0 = tx, y0 = ty, t0 = performance.now(); dur = dur || 260;
     lbImg.style.willChange = 'transform';
     (function f(now){
@@ -3375,7 +3412,6 @@ document.addEventListener('keydown', function(e){
     })(t0);
   }
 
-  // 松手：缩放回到 [MIN,maxS]，位移回到边界内
   function settle(mx, my){
     if(!G) G = geom();
     var S = Math.min(maxS, Math.max(MIN, s));
@@ -3407,12 +3443,6 @@ document.addEventListener('keydown', function(e){
     })(last);
   }
 
-  // 当前位移若处于橡皮筋越界状态，先还原成"未压缩"的值，否则重新建基准时会被二次压缩而抖动
-  function unfit(v, a, b){
-    if(v < a) return a + (v-a)/RUB;
-    if(v > b) return b + (v-b)/RUB;
-    return v;
-  }
   function beginPan(t){
     mode = 'pan';
     var L = lim(s);
@@ -3436,16 +3466,19 @@ document.addEventListener('keydown', function(e){
   lb.addEventListener('touchstart', function(e){
     if(!lb.classList.contains('on')) return;
     var n = e.touches.length;
-    stop();
+    stop(); flush();
     if(n === 1){
-      multi = false; G = geom(); samples = [];
+      multi = false; samples = [];
       var t = e.touches[0];
       tap = { t:Date.now(), x:t.clientX, y:t.clientY, moved:false, onImg:lbImgBox.contains(e.target) };
-      if(s > 1.02){ lbImg.style.willChange = 'transform'; beginPan(t); } else mode = null;
+      if(s > 1.02){
+        setZoomClass(true); lbImg.style.willChange = 'transform';
+        snapWrap(); G = geom(); beginPan(t);
+      } else { G = null; mode = null; }
     } else {
-      multi = true; tap = null; G = geom();
-      lbImg.style.willChange = 'transform';
-      beginPinch(e.touches);
+      multi = true; tap = null;
+      setZoomClass(true); lbImg.style.willChange = 'transform';
+      snapWrap(); G = geom(); beginPinch(e.touches);
     }
   }, {passive:true});
 
@@ -3460,7 +3493,10 @@ document.addEventListener('keydown', function(e){
       e.preventDefault();
       var d = dist(e.touches);
       var mx = (e.touches[0].clientX + e.touches[1].clientX)/2, my = (e.touches[0].clientY + e.touches[1].clientY)/2;
-      var raw = base.s * d / base.d;
+      // 死区：忽略手指刚落下时的微小抖动，且在死区边界处连续（不会突变）
+      var dd = d - base.d;
+      var de = Math.abs(dd) <= DEAD ? 0 : dd - (dd > 0 ? DEAD : -DEAD);
+      var raw = base.s * (base.d + de) / base.d;
       var ns = raw < MIN ? MIN - (MIN-raw)*.5 : (raw > maxS ? maxS + (raw-maxS)*.25 : raw);
       var qx = (base.mx - G.cx - base.tx) / base.s, qy = (base.my - G.cy - base.ty) / base.s;
       var L = lim(ns);
@@ -3468,7 +3504,7 @@ document.addEventListener('keydown', function(e){
       tx = fit((mx - G.cx) - ns*qx, L.x0, L.x1, true);
       ty = fit((my - G.cy) - ns*qy, L.y0, L.y1, true);
       lastMid = { x:mx, y:my };
-      apply();
+      schedule();
     } else if(n === 1 && mode === 'pan'){
       e.preventDefault();
       var t = e.touches[0], L2 = lim(s);
@@ -3477,13 +3513,14 @@ document.addEventListener('keydown', function(e){
       var now = performance.now();
       samples.push({ t:now, x:tx, y:ty });
       while(samples.length > 2 && now - samples[0].t > 100) samples.shift();
-      apply();
+      schedule();
     }
   }, {passive:false});
 
   lb.addEventListener('touchend', function(e){
     if(!lb.classList.contains('on')) return;
     var n = e.touches.length;
+    flush();
 
     if(n === 0 && tap && !multi && tap.onImg && !tap.moved && Date.now() - tap.t < 300){
       var ct = e.changedTouches[0], now = Date.now();
@@ -3495,7 +3532,7 @@ document.addEventListener('keydown', function(e){
     if(n === 0) tap = null;
 
     if(mode === 'pinch' && n < 2){
-      if(n === 1 && s > 1.02 && s <= maxS){ beginPan(e.touches[0]); }       // 双指→单指：重置平移基准，避免跳变
+      if(n === 1 && s > 1.02 && s <= maxS){ beginPan(e.touches[0]); }
       else { mode = null; settle(lastMid.x, lastMid.y); }
     } else if(mode === 'pan' && n === 0){
       mode = null;
@@ -3504,7 +3541,7 @@ document.addEventListener('keydown', function(e){
   }, {passive:true});
 
   lb.addEventListener('touchcancel', function(){
-    tap = null;
+    tap = null; flush();
     if(mode){ mode = null; if(G) settle(lastMid.x, lastMid.y); }
   }, {passive:true});
 
@@ -3513,14 +3550,19 @@ document.addEventListener('keydown', function(e){
     lb.addEventListener(nm, function(e){ if(lb.classList.contains('on')) e.preventDefault(); }, {passive:false});
   });
 
-  // 切图/关闭/重开时必须复位；旋转屏幕后边界失效，也复位
+  // 切图/关闭/重开时必须复位
   window._lbResetZoom = function(instant){
     stop(); mode = null; tap = null; samples = []; lastTap.t = 0;
     if(instant || (s === 1 && tx === 0 && ty === 0)){ s = 1; tx = 0; ty = 0; apply(); end(); }
     else { G = geom(); tweenTo(1, 0, 0, 200); }
   };
-  window.addEventListener('resize', function(){ if(s !== 1 || tx || ty) window._lbResetZoom(false); });
-  window.addEventListener('orientationchange', function(){ window._lbResetZoom(true); });
+  // 只在宽度变化（旋转屏幕）时复位；iOS 地址栏收放只改高度，不能因此把图弹回去
+  window.addEventListener('resize', function(){
+    if(window.innerWidth === lastW) return;
+    lastW = window.innerWidth;
+    if(s !== 1 || tx || ty) window._lbResetZoom(false);
+  });
+  window.addEventListener('orientationchange', function(){ lastW = window.innerWidth; window._lbResetZoom(true); });
 })();
 })();
 function togglePlay(aid,bid){
@@ -4136,6 +4178,7 @@ function triggerStmtPoem(){
   var t=0;
   function draw(){
     requestAnimationFrame(draw);
+    if(window._lbOpen) return;
     t+=0.01;
     ctx.clearRect(0,0,W,H);
 
@@ -4308,11 +4351,14 @@ function triggerStmtPoem(){
     tx=rx*max;
     ty=ry*max;
   },{passive:true});
+  var _lastT='';
   (function tick(){
+    requestAnimationFrame(tick);
+    if(window._lbOpen) return;
     cx+=(tx-cx)*0.04;
     cy+=(ty-cy)*0.04;
-    c.style.transform='translate('+cx+'px,'+cy+'px)';
-    requestAnimationFrame(tick);
+    var v='translate('+cx.toFixed(2)+'px,'+cy.toFixed(2)+'px)';
+    if(v!==_lastT){ _lastT=v; c.style.transform=v; }
   })();
 })();
 
