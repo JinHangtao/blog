@@ -3285,6 +3285,7 @@ function _lbMeta(t){   // 缩略图的静态样式：飞行中不会变，读一
   return {
     op: ((cs && cs.objectPosition) || '50% 50%').split(/\s+/),
     filter: (cs && cs.filter) || 'none',
+    rest: (cs && cs.getPropertyValue('--pi-f') || '').trim(),
     cardR: (t && t.parentElement ? parseFloat(getComputedStyle(t.parentElement).borderRadius) : 0) || 10
   };
 }
@@ -3381,6 +3382,17 @@ var _lbEaseFn = (function(){            // cubic-bezier(.32,.72,0,1)
   };
 })();
 function _lbLerp(a, b, k){ return a + (b - a) * k; }
+// 把 'brightness(.82) saturate(.68) contrast(1.05)' 解析成数值，便于逐帧插值（不支持的函数当作 1）
+function _lbParseFilter(str){
+  var o = { b: 1, s: 1, c: 1 };
+  if(!str || str === 'none') return o;
+  var re = /(brightness|saturate|contrast)\(\s*([\d.]+)(%?)\s*\)/g, m;
+  while((m = re.exec(str))){
+    var v = parseFloat(m[2]); if(m[3]) v /= 100;
+    if(m[1] === 'brightness') o.b = v; else if(m[1] === 'saturate') o.s = v; else o.c = v;
+  }
+  return o;
+}
 function _lbDrive(img, t, b, dir, dur){
   var box  = document.getElementById('lbImgBox');
   var meta = _lbMeta(t);                              // 静态样式只读一次
@@ -3400,6 +3412,9 @@ function _lbDrive(img, t, b, dir, dur){
   // 终点（灯箱位）姿态：灯箱里放大/平移过时取当时的 transform
   var F = { tx: 0, ty: 0, s: 1, r: parseFloat(getComputedStyle(img).borderRadius) || 10 };
   if(_lbFromTf){ try{ var mx = new DOMMatrix(_lbFromTf); F.tx = mx.e; F.ty = mx.f; F.s = mx.a || 1; }catch(e){} }
+
+  var FV = _lbParseFilter(dir === 'in' ? meta.filter : (meta.rest || meta.filter));   // 缩略图端的滤镜
+  var hasFilter = Math.abs(FV.b - 1) > .002 || Math.abs(FV.s - 1) > .002 || Math.abs(FV.c - 1) > .002;
 
   var prevTr = img.style.transition;
   img.style.transition = 'none';                       // 防止残留的 CSS transition 把每帧写入再平滑一遍（=额外延迟）
@@ -3478,7 +3493,11 @@ function _lbDrive(img, t, b, dir, dur){
     // ── 写（img 与 box 同帧、一次写完）──
     img.style.transform = 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
     img.style.clipPath  = clip;
-    img.style.filter    = (u < .999 && meta.filter !== 'none') ? meta.filter : '';
+    // 滤镜随同一进度 u 平滑过渡（缩略图的暗色调 ⇄ 灯箱里的原色），不再在起点/终点跳变
+    if(hasFilter){
+      var fb = _lbLerp(FV.b, 1, u), fs = _lbLerp(FV.s, 1, u), fc = _lbLerp(FV.c, 1, u);
+      img.style.filter = (u > .998) ? '' : 'brightness(' + fb.toFixed(3) + ') saturate(' + fs.toFixed(3) + ') contrast(' + fc.toFixed(3) + ')';
+    }
     if(needBoxClip) box.style.clipPath = boxClip;
 
     if(p >= 1){
