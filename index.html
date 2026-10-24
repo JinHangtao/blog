@@ -791,6 +791,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
    只淡背景，图片由 FLIP 飞行动画接管。visibility 延迟 .5s 隐藏，等飞回动画播完。 */
 .lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .5s;}
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
+.lb.on.lb-flyin{pointer-events:none}
 .lb.on .lb-img img{visibility:visible}
 .lb.lb-flying .lb-img img{box-shadow:none !important;will-change:transform,clip-path;backface-visibility:hidden;}
 .lb.lb-flying .lb-img{will-change:clip-path;}
@@ -3192,9 +3193,12 @@ var _lbAnimBox = null; // （已弃用：原 tab 栏避让遮挡窗，保留变�
 var _lbThumb = null;   // 当前被隐藏的缩略图 <img>
 var _lbTok   = 0;      // 防竞态 token
 var _lbFromTf = '';
-function _lbFlyState(on){
+function _lbFlyState(on, dir){
   window._lbFlying = !!on;
-  var e = document.getElementById('lb'); if(e) e.classList.toggle('lb-flying', !!on);
+  var e = document.getElementById('lb');
+  if(e){ e.classList.toggle('lb-flying', !!on); e.classList.toggle('lb-flyin', !!on && dir === 'in'); }
+  if(on && dir === 'in') document.body.style.overflow = '';            // 飞入中允许用户滚动页面，动画实时跟随
+  else if(!on && window._lbOpen) document.body.style.overflow = 'hidden'; // 灯箱仍开着：落地后重新锁住背景滚动
 }    // 飞回的起点 transform（灯箱里放大 / 平移过时 = 当时的内联 transform，否则空）
 var _LB_EASE = 'cubic-bezier(.32,.72,0,1)';
 
@@ -3338,6 +3342,12 @@ function _lbImgFrames(img, p, dir){
    滚多快都平滑贴合；遮挡窗(tab 栏/区块边距)也同步重算。 */
 var _lbTrackRaf = 0;
 var _lbDirty = false;
+var _lbMainEl = null;
+function _lbScrollSig(){
+  if(!_lbMainEl) _lbMainEl = document.querySelector('.main');
+  var m = _lbMainEl;
+  return (window.pageYOffset || 0) + '|' + (window.pageXOffset || 0) + '|' + (m ? m.scrollTop + '|' + m.scrollLeft : '');
+}
 function _lbMarkDirty(){ _lbDirty = true; }
 ['scroll','resize','touchmove','wheel'].forEach(function(n){
   window.addEventListener(n, _lbMarkDirty, {passive:true, capture:true});
@@ -3349,7 +3359,7 @@ function _lbTrack(anim, t, b, dir){
   _lbStopTrack();
   if(!(anim && anim.effect && anim.effect.setKeyframes)) return;
   var img = document.getElementById('lbImg');
-  var last = '', idle = 0;
+  var last = '', idle = 0, lastSig = _lbScrollSig();
   _lbDirty = false;
   (function tick(){
     _lbTrackRaf = 0;
@@ -3358,8 +3368,9 @@ function _lbTrack(anim, t, b, dir){
     if(st === 'finished' || st === 'idle') return;
     // 没有滚动 / 缩放事件就完全不碰布局（原来每帧 3 次 getBoundingClientRect + setKeyframes）
     // 惯性滚动没有事件时，每 6 帧兜底检查一次
-    if(_lbDirty || (++idle % 6 === 0)){
-      _lbDirty = false;
+    var sig = _lbScrollSig();
+    if(_lbDirty || sig !== lastSig || (++idle % 6 === 0)){
+      _lbDirty = false; lastSig = sig;
       var a = _lbThumbRect(t, b);
       var key = [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 2); }).join(',');
       if(key !== last){
@@ -3393,7 +3404,7 @@ function _lbFlyIn(idx, tok){
   _lbHideThumb(t);
   img.style.opacity = '';
   _lbCancelAnim();
-  _lbFlyState(true);
+  _lbFlyState(true, 'in');
   _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(a, 'in'),
     { duration: 520, easing: _LB_EASE, fill: 'backwards' });   // 起点：只露出缩略图可见的那一块
   var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
@@ -3431,7 +3442,7 @@ function _lbFlyOut(){
       var a = _lbThumbRect(t, b);
       var p = _lbPose(t, b, a);
       _lbFromTf = curTf || '';
-      _lbFlyState(true);
+      _lbFlyState(true, 'out');
       _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(a, 'out'),
         { duration: 460, easing: _LB_EASE, fill: 'forwards' });   // 终点：收进缩略图可见的那一块（钻回 tab 栏下面）
       var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
