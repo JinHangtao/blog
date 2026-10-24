@@ -3242,6 +3242,7 @@ function _lbRestoreThumb(){
   if(_lbThumb){ _lbThumb.style.visibility = ''; _lbThumb = null; }
 }
 function _lbCancelAnim(){
+  _lbStopTrack();
   if(_lbAnim){ var a = _lbAnim; _lbAnim = null; a.onfinish = null; try{ a.cancel(); }catch(e){} }
   if(_lbAnimBox){ var c = _lbAnimBox; _lbAnimBox = null; c.onfinish = null; try{ c.cancel(); }catch(e){} }
 }
@@ -3282,15 +3283,64 @@ function _lbShowSide(tok, delay){
 //  · 飞入：起点 = 缩略图所在区块的可画区域 W，保持到 35%（此时图片已飞完约 8 成、背景已压暗），再放开到 E（W ∪ 灯箱图）
 //  · 飞回：镜像 —— 先从 E 收紧到 W（前 30%，此时背景还很黑，tab 栏看不见），之后一直被 W 裁住，图片就会"钻到 tab 栏 / 区块边缘下面"落回原位
 //  灯箱图完全落在 W 内（桌面端常见）时 E == W，全程不会有任何跳变。
-function _lbWinAnim(W, b, dir, dur){
+function _lbWinFrames(W, b, dir){
   var box = document.getElementById('lbImgBox');
-  var r   = box.getBoundingClientRect();
+  var r   = box.getBoundingClientRect();           // #lbImgBox 自身无 transform，clip-path 也不影响它的矩形 → 可随时重测
   var cw  = _lbWinClip(r, W), ce = _lbWinClip(r, _lbUnion(W, b));
   var ease = 'cubic-bezier(.4,0,.2,1)';
-  var kf = (dir === 'in')
+  return (dir === 'in')
     ? [{ clipPath: cw }, { clipPath: cw, offset: .35, easing: ease }, { clipPath: ce }]
     : [{ clipPath: ce, easing: 'cubic-bezier(.2,.6,.2,1)' }, { clipPath: cw, offset: .3 }, { clipPath: cw }];
-  return box.animate(kf, { duration: dur, easing: 'linear', fill: dir === 'in' ? 'backwards' : 'forwards' });
+}
+function _lbWinAnim(W, b, dir, dur){
+  var box = document.getElementById('lbImgBox');
+  return box.animate(_lbWinFrames(W, b, dir), { duration: dur, easing: 'linear', fill: dir === 'in' ? 'backwards' : 'forwards' });
+}
+// 图片本体的关键帧：灯箱位 ⇄ 缩略图位（p = _lbPose 的结果）
+function _lbImgFrames(img, p, dir){
+  var full  = { transform: 'none', clipPath: _lbEndClip(img), filter: 'none' };
+  var thumb = { transform: p.transform, clipPath: p.clip, filter: p.filter };
+  return dir === 'in' ? [thumb, full] : [full, thumb];
+}
+
+/* ── 实时跟随：飞行期间每帧重读缩略图的屏幕位置，把动画「缩略图一端」的关键帧重定向 ──
+   飞行层(#lbImg)本身是 position:fixed 体系里的独立图层，不随页面滚动；
+   以前它的起点/终点只在动画开始那一刻量一次，飞行中用户滚动页面（飞回时灯箱已 pointer-events:none，
+   页面立刻可滚；iOS 惯性滚动也会继续），缩略图跑了，图片却飞向旧坐标，落地时缩略图一闪跳位。
+   现在 setKeyframes 保留当前进度（currentTime 不变），只改缩略图那一端 → 图片始终朝「此刻」的缩略图飞，
+   滚多快都平滑贴合；遮挡窗(tab 栏/区块边距)也同步重算。 */
+var _lbTrackRaf = 0;
+function _lbStopTrack(){
+  if(_lbTrackRaf){ cancelAnimationFrame(_lbTrackRaf); _lbTrackRaf = 0; }
+}
+function _lbTrack(anim, boxAnim, t, b, dir){
+  _lbStopTrack();
+  if(!(anim && anim.effect && anim.effect.setKeyframes)) return;   // 不支持就退回原来的静态行为
+  var img = document.getElementById('lbImg');
+  var last = '';
+  (function tick(){
+    _lbTrackRaf = 0;
+    if(_lbAnim !== anim) return;
+    var st = anim.playState;
+    if(st === 'finished' || st === 'idle') return;
+    if(t && t.isConnected !== false){
+      var a = t.getBoundingClientRect();
+      var W = _lbFreeRect(t);
+      var key = [a.left, a.top, a.width, a.height, W.l, W.t, W.r, W.b].map(function(v){ return Math.round(v * 10); }).join(',');
+      if(key !== last){
+        last = key;
+        if(a.width > 4 && a.height > 4){
+          try{
+            anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b), dir));
+            if(boxAnim && _lbAnimBox === boxAnim && boxAnim.effect && boxAnim.effect.setKeyframes){
+              boxAnim.effect.setKeyframes(_lbWinFrames(W, b, dir));
+            }
+          }catch(e){}
+        }
+      }
+    }
+    _lbTrackRaf = requestAnimationFrame(tick);
+  })();
 }
 // 打开：缩略图原位 → 灯箱位置
 function _lbFlyIn(idx, tok){
@@ -3311,13 +3361,11 @@ function _lbFlyIn(idx, tok){
   _lbHideThumb(t);
   img.style.opacity = '';
   _lbCancelAnim();
-  var anim = img.animate([
-    { transform: p.transform, clipPath: p.clip, filter: p.filter },
-    { transform: 'none', clipPath: _lbEndClip(img), filter: 'none' }
-  ], { duration: 520, easing: _LB_EASE, fill: 'backwards' });
+  var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
   _lbAnim = anim;
   _lbAnimBox = _lbWinAnim(W, b, 'in', 520);
-  anim.onfinish = function(){ if(_lbAnim === anim){ _lbAnim = null; if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; } } };
+  anim.onfinish = function(){ _lbStopTrack(); if(_lbAnim === anim){ _lbAnim = null; if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; } } };
+  _lbTrack(anim, _lbAnimBox, t, b, 'in');
   _lbShowSide(tok, 300);
 }
 // 关闭：灯箱位置 → 缩略图原位。返回动画时长（0 = 没有飞，只淡出）
@@ -3332,13 +3380,12 @@ function _lbFlyOut(){
     if(b.width > 4 && b.height > 4){
       var p = _lbPose(t, b);
       var W = _lbFreeRect(t);
-      var anim = img.animate([
-        { transform: 'none', clipPath: _lbEndClip(img), filter: 'none' },
-        { transform: p.transform, clipPath: p.clip, filter: p.filter }
-      ], { duration: 460, easing: _LB_EASE, fill: 'forwards' });
+      var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
       _lbAnim = anim;
       _lbAnimBox = _lbWinAnim(W, b, 'out', 460);
+      _lbTrack(anim, _lbAnimBox, t, b, 'out');
       anim.onfinish = function(){
+        _lbStopTrack();
         if(_lbAnim !== anim) return;
         _lbAnim = null;
         _lbRestoreThumb();            // 缩略图先现形
