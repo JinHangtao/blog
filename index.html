@@ -844,11 +844,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   #lbSide[style*="opacity: 1"] .lb-desc,#lbSide[style*="opacity: 1"] .lb-rule{transform:none;transition:opacity .2s linear;transition-delay:0s}
 }
 .lb-col{display:flex;flex-direction:column;flex-shrink:0;}
-.lb-btns{display:flex;justify-content:space-between;align-items:center;padding:10px 0;opacity:0;transition:none;}
+.lb-btns{display:flex;justify-content:space-between;align-items:center;padding:10px 0;opacity:0;transition:opacity .34s cubic-bezier(.4,0,.2,1);}
+.lb-btns[style*="opacity: 1"]{transition:none;}
 .lb-btns-left{display:flex;gap:4px;}
 .lb-btns button{background:transparent;border:1px solid var(--line2);color:var(--fg-d);width:22px;height:22px;cursor:none;font-size:.55rem;border-radius:6px;display:flex;align-items:center;justify-content:center;
   /* 三个属性用同一条曲线同一时长：颜色 / 描边 / 底色一起变，不会有的先亮有的后亮 */
-  transition:border-color .32s cubic-bezier(.32,.72,0,1),color .32s cubic-bezier(.32,.72,0,1),background-color .32s cubic-bezier(.32,.72,0,1),opacity .14s ease-out,transform .14s ease-out;
+  transition:border-color .32s cubic-bezier(.32,.72,0,1),color .32s cubic-bezier(.32,.72,0,1),background-color .32s cubic-bezier(.32,.72,0,1),opacity .34s cubic-bezier(.4,0,.2,1),transform .34s cubic-bezier(.4,0,.2,1);
   -webkit-tap-highlight-color:transparent;outline:none;
   opacity:0;transform:translateY(6px) scale(.88);}
 /* 灯箱落定后（JS 把 .lb-btns 设为 opacity:1）三个按钮依次浮现：← → ✕；同时保留颜色/描边的 hover 过渡 */
@@ -3901,7 +3902,7 @@ function closeLb(){
   var _resetDelay = _lbFlyOut();                    // 先读缩略图位置并启动飞回，再改任何布局
   // 立即隐藏按钮和文字（按钮快速淡出，不和飞回的图片抢戏）
   var btns = document.querySelector('.lb-btns');
-  if(btns){ btns.style.transitionDuration = '.14s'; btns.style.pointerEvents = 'none'; btns.style.opacity = '0'; }
+  if(btns){ btns.style.transitionDuration = ''; btns.style.pointerEvents = 'none'; btns.style.opacity = '0'; }
   var sideEl = document.getElementById('lbSide');
   if(sideEl) sideEl.style.opacity = '0';
   var lb=document.getElementById('lb');
