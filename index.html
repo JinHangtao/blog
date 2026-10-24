@@ -3453,6 +3453,14 @@ function _lbDrive(img, t, b, dir, dur){
   var FV = _lbParseFilter(dir === 'in' ? meta.filter : (meta.rest || meta.filter));   // 缩略图端的滤镜
   var hasFilter = Math.abs(FV.b - 1) > .002 || Math.abs(FV.s - 1) > .002 || Math.abs(FV.c - 1) > .002;
 
+  // 顶部羽化遮罩：仅当缩略图有一部分被 tab 栏压住时启用；遮罩坐标相对 #lbImgBox，飞行中静止不动（无额外每帧开销）
+  var FEATHER = 14;
+  if(needBoxClip && a0.top < w.top){
+    var my = (w.top - bx.top);
+    var mk = 'linear-gradient(to bottom, transparent ' + my.toFixed(1) + 'px, #000 ' + (my + FEATHER).toFixed(1) + 'px)';
+    box.style.webkitMaskImage = mk; box.style.maskImage = mk;
+  }
+
   var prevTr = img.style.transition;
   img.style.transition = 'none';                       // 防止残留的 CSS transition 把每帧写入再平滑一遍（=额外延迟）
 
@@ -3479,6 +3487,7 @@ function _lbDrive(img, t, b, dir, dur){
     h.playState = 'idle';
     img.style.transform = ''; img.style.clipPath = ''; img.style.filter = ''; img.style.transition = prevTr;
     box.style.clipPath = '';
+    box.style.webkitMaskImage = ''; box.style.maskImage = '';
     _lbWinCache = null; _lbBoxCache = null;
   };
 
@@ -3536,6 +3545,12 @@ function _lbDrive(img, t, b, dir, dur){
       img.style.filter = (u > .998) ? '' : 'brightness(' + fb.toFixed(3) + ') saturate(' + fs.toFixed(3) + ') contrast(' + fc.toFixed(3) + ')';
     }
     if(needBoxClip) box.style.clipPath = boxClip;
+
+    if(dir === 'out' && p > .78){
+      if(!h._near){ h._near = true; _lbRestoreThumb(); }          // 缩略图在飞行图下面现形（二者像素一致，几乎不可见）
+      var q = Math.min(1, (p - .78) / .22);
+      img.style.opacity = String(1 - q * q * (3 - 2 * q));         // 飞行图 smoothstep 淡出：露出的是 tab 栏磨砂之下的真实缩略图
+    }
 
     if(p >= 1){
       h.playState = 'finished';
