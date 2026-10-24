@@ -3364,8 +3364,17 @@ function _lbFlyIn(idx, tok){
   var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
   _lbAnim = anim;
   _lbAnimBox = _lbWinAnim(W, b, 'in', 520);
-  anim.onfinish = function(){ _lbStopTrack(); if(_lbAnim === anim){ _lbAnim = null; if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; } } };
-  _lbTrack(anim, _lbAnimBox, t, b, 'in');
+  anim.onfinish = function(){
+    _lbStopTrack();
+    if(_lbAnim === anim){
+      _lbAnim = null;
+      try{ anim.cancel(); }catch(e){}
+      if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
+      var bx = document.getElementById('lbImgBox'); if(bx) bx.style.clipPath = '';
+      img.style.opacity = '';
+    }
+  };
+  _lbTrack(anim, _lbAnim && _lbAnimBox, t, b, 'in');
   _lbShowSide(tok, 300);
 }
 // 关闭：灯箱位置 → 缩略图原位。返回动画时长（0 = 没有飞，只淡出）
@@ -3447,19 +3456,25 @@ function _lbShow(idx, opening){
   // 布局（含桌面宽图/竖图模式）设置完后：打开 → 等图片 decode 再量位置飞入；切图 → 只换隐藏的缩略图
   function afterLayout(){
     if(opening){
-      var go = function(){ if(tok === _lbTok && window._lbOpen) _lbFlyIn(idx, tok); };
-      if(img.decode) img.decode().then(go, go); else go();
+      // go 只会执行一次；decode 卡住/永不返回时由 700ms 定时器兜底，避免灯箱一直停在 opacity:0
+      var fired = false;
+      var go = function(){ if(fired) return; fired = true; if(tok === _lbTok && window._lbOpen) _lbFlyIn(idx, tok); };
+      var dp = null;
+      try{ dp = img.decode ? img.decode() : null; }catch(e){ dp = null; }
+      if(dp && dp.then) dp.then(go, go); else go();
+      setTimeout(go, 700);
     } else {
       _lbHideThumb(_lbThumbOf(idx));
     }
+    _lbGuard(idx, tok);
   }
 
-  var _pre = new Image();
-  _lbPre = _pre;
+  var _tries = 0;
 
   function _handleLoaded(pre){
-    if(_lbPre !== pre) return;
+    if(_lbPre !== pre || tok !== _lbTok) return;
     pre.onload = null; pre.onerror = null;
+    src = pre.currentSrc || pre.src;   // 若走了重试地址，用真正加载成功的那个
     commit();
     if(window.innerWidth > 768) layoutDesktop();
     afterLayout();
@@ -3511,10 +3526,64 @@ function _lbShow(idx, opening){
     }
   }
 
-  _pre.onload  = function(){ _handleLoaded(_pre); };
-  _pre.onerror = function(){ if(_lbPre === _pre){ _lbStop(); } };
-  _pre.src = src;
-  if(_pre.complete && _pre.naturalWidth){ _handleLoaded(_pre); }
+  function load(url){
+    var pre = new Image();
+    _lbPre = pre;
+    pre.onload  = function(){ _handleLoaded(pre); };
+    pre.onerror = function(){
+      if(_lbPre !== pre || tok !== _lbTok) return;
+      pre.onload = null; pre.onerror = null;
+      if(_tries++ < 2){
+        // 加载失败（请求被中断/缓存里是残缺数据）：加时间戳绕过坏缓存重试，而不是留下一个空灯箱
+        setTimeout(function(){
+          if(tok !== _lbTok || !window._lbOpen) return;
+          load(src + (src.indexOf('?') < 0 ? '?' : '&') + '_lb=' + Date.now());
+        }, 200 * _tries);
+      } else {
+        _lbStop();
+      }
+    };
+    pre.src = url;
+    if(pre.complete && pre.naturalWidth){ _handleLoaded(pre); }
+  }
+  load(src);
+}
+
+// 兜底：灯箱已打开、本次 tok 仍有效，但图片仍不可见（decode/动画/加载任一环节掉链子）→ 强制显示
+function _lbGuard(idx, tok){
+  setTimeout(function(){
+    if(tok !== _lbTok || !window._lbOpen) return;
+    var img = document.getElementById('lbImg');
+    var box = document.getElementById('lbImgBox');
+    if(!img.getAttribute('src') || !img.naturalWidth){
+      // 图片没加载出来：直接用缩略图的地址再试一次
+      var t = _lbThumbOf(idx);
+      if(t && (t.currentSrc || t.src)){
+        img.onload = function(){ img.onload = null; _lbGuardReveal(tok); };
+        img.src = t.currentSrc || t.src;
+      }
+      return;
+    }
+    _lbGuardReveal(tok);
+  }, 1500);
+}
+function _lbGuardReveal(tok){
+  if(tok !== _lbTok || !window._lbOpen) return;
+  var img = document.getElementById('lbImg');
+  var box = document.getElementById('lbImgBox');
+  var flying = _lbAnim && _lbAnim.playState === 'running';
+  if(flying) return;
+  var op = parseFloat(getComputedStyle(img).opacity);
+  if(img.style.opacity === '0' || op < 0.05){
+    document.getElementById('lbSpinner').classList.remove('vis');
+    _lbCancelAnim();
+    img.style.opacity = '';
+    img.classList.remove('lb-fadein');
+    void img.offsetWidth;
+    img.classList.add('lb-fadein');
+    document.getElementById('lbSide').style.opacity = '1';
+  }
+  if(box && !_lbAnimBox) box.style.clipPath = '';
 }
 
 function openLb(idx){
@@ -3530,8 +3599,12 @@ function openLb(idx){
   _lbCancelAnim();
   _lbRestoreThumb();
   img.classList.remove('lb-fadein');
+  img.onload = null;
   img.src = '';
   img.style.opacity = '0';
+  img.style.transform = '';
+  var _bx = document.getElementById('lbImgBox'); if(_bx) _bx.style.clipPath = '';
+  var _wr = document.querySelector('.lb-wrap'); if(_wr){ _wr.style.transform = ''; _wr.style.transition = ''; }
   side.style.opacity = '0';
   document.getElementById('lb').classList.add('on');
   window._lbOpen=true;
@@ -3562,6 +3635,7 @@ function closeLb(){
   // 等灯箱淡出完成后再重置样式
   _lbCloseTmr = setTimeout(function(){
     _lbCloseTmr = null;
+    if(window._lbOpen) return;      // 期间又打开了，绝不能把新图清掉
     var img    = document.getElementById('lbImg');
     var imgBox = document.getElementById('lbImgBox');
     var colEl  = document.querySelector('.lb-col');
