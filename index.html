@@ -824,11 +824,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-btns-left{display:flex;gap:4px;}
 .lb-btns button{background:none;border:1px solid var(--line2);color:var(--fg-d);width:22px;height:22px;cursor:none;font-size:.55rem;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:border-color .22s,color .22s;}
 .lb-btns button:hover{border-color:var(--gold);color:var(--gold);}
-/* 底部 ← → ✕ 三个按钮：默认隐藏，图片落位/飞入开始后才淡入。
-   否则灯箱刚打开（img src 为空 → 容器宽度塌缩）或关闭收尾（img.src='' 后灯箱因 visibility 延迟还没真正隐藏）时，
-   三个小方框会被挤在一起闪现约 0.2s */
-.lb-btns{opacity:0;pointer-events:none;transition:opacity .22s ease;}
-.lb.btns-on .lb-btns{opacity:1;pointer-events:auto;}
 
 .blog-list{display:flex;flex-direction:column;gap:20px}
 .blog-post{
@@ -3283,7 +3278,6 @@ function _lbShowSide(tok, delay){
   setTimeout(function(){
     if(tok !== _lbTok || !window._lbOpen) return;
     document.getElementById('lbSide').style.opacity = '1';
-    document.getElementById('lb').classList.add('btns-on');
   }, delay);
 }
 // 屏幕空间遮挡窗动画（作用在不随图片变换的 #lbImgBox 上）：
@@ -3607,7 +3601,6 @@ function _lbGuardReveal(tok){
     }
   }
   document.getElementById('lbSide').style.opacity = '1';
-  document.getElementById('lb').classList.add('btns-on');
   // 3) 缩略图应保持隐藏（与灯箱图一一对应）
   var t = _lbThumbOf(curLbIdx);
   if(t && _lbThumb !== t) _lbHideThumb(t);
@@ -3618,7 +3611,6 @@ function openLb(idx){
   _lbSibs   = getSiblings();
   var btns = document.querySelector('.lb-btns');
   if(btns) btns.style.opacity = '';
-  document.getElementById('lb').classList.remove('btns-on');
   var img   = document.getElementById('lbImg');
   var side  = document.getElementById('lbSide');
   // 清空舊圖，確保不顯示任何殘留
@@ -3652,7 +3644,7 @@ function closeLb(){
   var _resetDelay = _lbFlyOut();                    // 先读缩略图位置并启动飞回，再改任何布局
   // 立即隐藏按钮和文字
   var btns = document.querySelector('.lb-btns');
-  document.getElementById('lb').classList.remove('btns-on');
+  if(btns) btns.style.opacity = '0';
   var sideEl = document.getElementById('lbSide');
   if(sideEl) sideEl.style.opacity = '0';
   var lb=document.getElementById('lb');
@@ -3680,6 +3672,7 @@ function closeLb(){
     if(imgBox) { imgBox.style.width=''; }
     if(colEl)  { colEl.style.width=''; }
     if(sideEl) { sideEl.style.opacity='0'; sideEl.style.position=''; sideEl.style.transform=''; sideEl.style.left=''; sideEl.style.top=''; sideEl.style.width=''; sideEl.style.marginTop=''; }
+    if(btns) btns.style.opacity = '';
   }, _resetDelay);
 }
 
