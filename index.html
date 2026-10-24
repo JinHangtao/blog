@@ -3349,26 +3349,30 @@ function _lbTrack(anim, t, b, dir){
   _lbStopTrack();
   if(!(anim && anim.effect && anim.effect.setKeyframes)) return;
   var img = document.getElementById('lbImg');
-  var last = '', idle = 0;
+  // 以「刚量过的缩略图位置」为基准，起飞那一帧不重复设置关键帧
+  var last = (function(){
+    var a0 = _lbThumbRect(t, b);
+    return [a0.left, a0.top, a0.width, a0.height].map(function(v){ return Math.round(v * 2); }).join(',');
+  })();
   _lbDirty = false;
+  // 每帧直接读缩略图的屏幕位置，不再依赖 scroll / wheel / touchmove 事件：
+  //  · iOS 惯性滚动、嵌套滚动容器、懒加载图片把布局顶开等「缩略图被动移位」的情况，事件不一定到，
+  //    以前会飞向过期坐标；现在无论缩略图因为什么原因移动，下一帧都会被重新瞄准。
+  //  · 位置没变（key 相同）就不碰动画，只多一次 getBoundingClientRect，开销可忽略。
   (function tick(){
     _lbTrackRaf = 0;
     if(_lbAnim !== anim) return;
     var st = anim.playState;
     if(st === 'finished' || st === 'idle') return;
-    // 没有滚动 / 缩放事件就完全不碰布局（原来每帧 3 次 getBoundingClientRect + setKeyframes）
-    // 惯性滚动没有事件时，每 6 帧兜底检查一次
-    if(_lbDirty || (++idle % 6 === 0)){
-      _lbDirty = false;
-      var a = _lbThumbRect(t, b);
-      var key = [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 2); }).join(',');
-      if(key !== last){
-        last = key;
-        try{
-          anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b, a), dir));
-          if(_lbAnimBox && _lbAnimBox.effect) _lbAnimBox.effect.setKeyframes(_lbBoxFrames(a, dir));
-        }catch(e){}
-      }
+    _lbDirty = false;
+    var a = _lbThumbRect(t, b);
+    var key = [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 2); }).join(',');
+    if(key !== last){
+      last = key;
+      try{
+        anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b, a), dir));
+        if(_lbAnimBox && _lbAnimBox.effect) _lbAnimBox.effect.setKeyframes(_lbBoxFrames(a, dir));
+      }catch(e){}
     }
     _lbTrackRaf = requestAnimationFrame(tick);
   })();
