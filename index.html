@@ -793,6 +793,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
 .lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);opacity:0;transition:opacity .42s cubic-bezier(.4,0,.2,1);}
 .lb.on .lb-bg{opacity:1}
+/* FLIP 期间缩略图已被飞行中的灯箱图接管：槽位退回"静止的空卡片"。
+   否则 hover / 手机点按后残留的金色描边、金色光晕、底部渐变、标题文字会留在原位，
+   飞入时从框里冒出一圈金边，飞回时落进金框 —— 边缘就是那根"莫名其妙的长金线"。
+   transition:none 保证加/去 class 时不会有过渡中间态；transform:none 去掉桌面端的 3D 倾斜，让量到的位置与静止位置一致 */
+.gi.lb-away,.gi1.lb-away{border-color:var(--line) !important;box-shadow:none !important;transform:none !important;transition:none !important}
+.gi.lb-away::after,.gi1.lb-away::after{opacity:0 !important;transition:none !important}
+.gi.lb-away .gi-glow,.gi1.lb-away .gi1-glow,.gi.lb-away .gi-info,.gi1.lb-away .gi1-info{opacity:0 !important;transition:none !important}
 .lb-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:0;justify-content:center;margin-top:4vh;}
 /* 容器：border-radius + overflow:hidden 在這裡，永遠是圓角 */
 .lb-img{flex-shrink:0;position:relative;line-height:0;}
@@ -3233,13 +3240,17 @@ function _lbThumbVisible(t){
   var w = Math.min(a.right, W.r) - Math.max(a.left, W.l), h = Math.min(a.bottom, W.b) - Math.max(a.top, W.t);
   return w > 0 && h > 0 && (w * h) / (a.width * a.height) >= 0.4;
 }
+function _lbAway(t, on){   // 缩略图所在槽位：飞行期间去掉 hover 金框/光晕/倾斜（见 .lb-away）
+  var s = t && t.closest && t.closest('.gi,.gi1');
+  if(s) s.classList.toggle('lb-away', !!on);
+}
 function _lbHideThumb(t){
-  if(_lbThumb && _lbThumb !== t) _lbThumb.style.visibility = '';
+  if(_lbThumb && _lbThumb !== t){ _lbThumb.style.visibility = ''; _lbAway(_lbThumb, false); }
   _lbThumb = t || null;
-  if(t) t.style.visibility = 'hidden';
+  if(t){ t.style.visibility = 'hidden'; _lbAway(t, true); }
 }
 function _lbRestoreThumb(){
-  if(_lbThumb){ _lbThumb.style.visibility = ''; _lbThumb = null; }
+  if(_lbThumb){ _lbThumb.style.visibility = ''; _lbAway(_lbThumb, false); _lbThumb = null; }
 }
 function _lbCancelAnim(){
   if(_lbAnim){ var a = _lbAnim; _lbAnim = null; a.onfinish = null; try{ a.cancel(); }catch(e){} }
@@ -3306,9 +3317,9 @@ function _lbFlyIn(idx, tok){
     _lbShowSide(tok, 0);
     return;
   }
+  _lbHideThumb(t);                       // 先让槽位退回静止态（去倾斜/金框），再量位置，起点才与静止位置一致
   var p = _lbPose(t, b);
-  var W = _lbFreeRect(t);                // 先量，再隐藏缩略图
-  _lbHideThumb(t);
+  var W = _lbFreeRect(t);
   img.style.opacity = '';
   _lbCancelAnim();
   var anim = img.animate([
@@ -3330,7 +3341,7 @@ function _lbFlyOut(){
   if(canFly){
     var b = img.getBoundingClientRect();
     if(b.width > 4 && b.height > 4){
-      var p = _lbPose(t, b);
+      var p = _lbPose(t, b);   // 缩略图在打开/切图时已被 _lbHideThumb 置为静止态，这里量到的就是静止位置
       var W = _lbFreeRect(t);
       var anim = img.animate([
         { transform: 'none', clipPath: _lbEndClip(img), filter: 'none' },
