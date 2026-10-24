@@ -3282,40 +3282,15 @@ function _lbShowSide(tok, delay){
 //  · 飞入：起点 = 缩略图所在区块的可画区域 W，保持到 35%（此时图片已飞完约 8 成、背景已压暗），再放开到 E（W ∪ 灯箱图）
 //  · 飞回：镜像 —— 先从 E 收紧到 W（前 30%，此时背景还很黑，tab 栏看不见），之后一直被 W 裁住，图片就会"钻到 tab 栏 / 区块边缘下面"落回原位
 //  灯箱图完全落在 W 内（桌面端常见）时 E == W，全程不会有任何跳变。
-function _lbWinKF(W, b, dir, r){
-  var cw  = _lbWinClip(r, W), ce = _lbWinClip(r, _lbUnion(W, b));
-  var ease = 'cubic-bezier(.4,0,.2,1)';
-  return (dir === 'in')
-    ? [{ clipPath: cw }, { clipPath: cw, offset: .35, easing: ease }, { clipPath: ce }]
-    : [{ clipPath: ce, easing: 'cubic-bezier(.2,.6,.2,1)' }, { clipPath: cw, offset: .3 }, { clipPath: cw }];
-}
 function _lbWinAnim(W, b, dir, dur){
   var box = document.getElementById('lbImgBox');
   var r   = box.getBoundingClientRect();
-  return box.animate(_lbWinKF(W, b, dir, r), { duration: dur, easing: 'linear', fill: dir === 'in' ? 'backwards' : 'forwards' });
-}
-// 飞行期间跟随滚动：缩略图 / 遮挡窗的位置每帧重新测量，热更新关键帧终点（不重置进度、不改缓动）。
-// 否则关闭时 body 已解除滚动锁，用户滚动页面 → 缩略图动了、飞行图还飞向动画开始时量到的旧坐标。
-function _lbTrack(anim, animBox, t, b, dir){
-  if(!anim || !anim.effect || !anim.effect.setKeyframes) return;   // 旧浏览器：保持原行为
-  var box = document.getElementById('lbImgBox');
-  var r   = box.getBoundingClientRect();                           // 同步读取：此时布局尚未被 closeLb 改动
-  function step(){
-    if(_lbAnim !== anim) return;                                   // 已结束 / 被取消 / 被新动画取代
-    var ph = anim.playState;
-    if(ph === 'finished' || ph === 'idle') return;
-    try{
-      var p = _lbPose(t, b), W = _lbFreeRect(t);
-      anim.effect.setKeyframes(dir === 'in'
-        ? [{ transform: p.transform, clipPath: p.clip, filter: p.filter },
-           { transform: 'none', clipPath: _lbEndClip(document.getElementById('lbImg')), filter: 'none' }]
-        : [{ transform: 'none', clipPath: _lbEndClip(document.getElementById('lbImg')), filter: 'none' },
-           { transform: p.transform, clipPath: p.clip, filter: p.filter }]);
-      if(animBox && animBox.effect) animBox.effect.setKeyframes(_lbWinKF(W, b, dir, r));
-    }catch(e){ return; }
-    requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
+  var cw  = _lbWinClip(r, W), ce = _lbWinClip(r, _lbUnion(W, b));
+  var ease = 'cubic-bezier(.4,0,.2,1)';
+  var kf = (dir === 'in')
+    ? [{ clipPath: cw }, { clipPath: cw, offset: .35, easing: ease }, { clipPath: ce }]
+    : [{ clipPath: ce, easing: 'cubic-bezier(.2,.6,.2,1)' }, { clipPath: cw, offset: .3 }, { clipPath: cw }];
+  return box.animate(kf, { duration: dur, easing: 'linear', fill: dir === 'in' ? 'backwards' : 'forwards' });
 }
 // 打开：缩略图原位 → 灯箱位置
 function _lbFlyIn(idx, tok){
@@ -3342,7 +3317,6 @@ function _lbFlyIn(idx, tok){
   ], { duration: 520, easing: _LB_EASE, fill: 'backwards' });
   _lbAnim = anim;
   _lbAnimBox = _lbWinAnim(W, b, 'in', 520);
-  _lbTrack(anim, _lbAnimBox, t, b, 'in');
   anim.onfinish = function(){ if(_lbAnim === anim){ _lbAnim = null; if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; } } };
   _lbShowSide(tok, 300);
 }
@@ -3364,7 +3338,6 @@ function _lbFlyOut(){
       ], { duration: 460, easing: _LB_EASE, fill: 'forwards' });
       _lbAnim = anim;
       _lbAnimBox = _lbWinAnim(W, b, 'out', 460);
-      _lbTrack(anim, _lbAnimBox, t, b, 'out');
       anim.onfinish = function(){
         if(_lbAnim !== anim) return;
         _lbAnim = null;
