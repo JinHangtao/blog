@@ -1728,59 +1728,48 @@ button, a, input, label, [onclick], video {
   .jh-toast-msg{ font-size:.85rem; }
 }
 
-/* ══ Image loading v6 — 无色对焦，全程 GPU 合成（opacity / transform / filter）══
-   ① 占位 = 卡片底色 + 一层极淡的纯白呼吸（无渐变/噪点/内阴影，不会有“分辨率不足”的分层感）
-   ② 图片 decode 完成后：无色（灰度）+ 虚化 + 微放大 → 同一条 iOS 缓动曲线里同时清晰、同时上色
-      透明度比对焦更早到位，所以看到的是“灰白雾气里画面逐渐凝实”，不是彩色糊块
-   ③ 不使用 @property / 自定义属性动画（会退回主线程、大图掉帧），虚化半径收小，降低每帧重绘成本 */
+/* ══ Image loading v7 — 无中间态的对焦浮现 ══
+   为什么去掉灰色虚化：深色背景上平滑的低对比渐变会被 8 位屏幕切成色阶断层（banding），
+   看起来像分辨率不足；占位层的低透明度呼吸也只有 1~2 级灰的跳变，像在“闪”而不是“呼吸”。
+   做法：① 占位 = 卡片本身的底色，完全静止（不叠任何半透明层）
+        ② 图片 decode 完成后：透明度 + 极轻的微缩放 + 很小的虚化（4px，尚不足以产生断层）一次性浮现
+        ③ 没有灰度、没有大半径虚化 → 画面从头到尾保持细节与真实色彩，只是“从暗处凝实”
+   全程只用 opacity / transform / filter（GPU 合成） */
 .gi,.gi1{--pi-f:brightness(.82) saturate(.68) contrast(1.05);}
 .gi img,.gi1 img{--pi-f:brightness(.82) saturate(.68) contrast(1.05);}
 .blog-cover-img,.pi-wrap{--pi-f:brightness(.88) saturate(.72);}
 
 :root{
-  --pi-out:cubic-bezier(.22,1,.36,1);   /* 强 ease-out */
-  --pi-ios:cubic-bezier(.32,.72,0,1);   /* iOS 系统缓动：起步即响应，收尾极长 */
-  --pi-sine:cubic-bezier(.37,0,.63,1);  /* 呼吸 */
+  --pi-out:cubic-bezier(.22,1,.36,1);
+  --pi-ios:cubic-bezier(.32,.72,0,1);
 }
 
-.pi-slot{isolation:isolate;}
-.pi-skel{position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;overflow:hidden;
-  background:rgba(255,255,255,.045);
-  animation:piBreath 2.6s var(--pi-sine) infinite alternate;
-  animation-delay:var(--pi-d,0s);
-  transition:opacity .8s var(--pi-sine);}
-.pi-skel.pi-out{opacity:0;}
-@keyframes piBreath{from{opacity:.35;}to{opacity:1;}}
-
-.pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;}
+.pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;background:var(--card2);}
 .pi-wrap:not(.pi-ready){min-height:150px;}
 
-/* —— 原图：无色虚焦 → 对焦 + 上色（单条曲线，GPU 合成）—— */
 img.pi[data-pi]{
   opacity:0!important;
-  transform:scale(1.03)!important;
-  filter:blur(12px) grayscale(1) var(--pi-f,brightness(1))!important;
-  transition:opacity .6s var(--pi-out),
-             transform 1.3s var(--pi-ios),
-             filter 1.15s var(--pi-ios)!important;
+  transform:scale(1.02)!important;
+  filter:blur(4px) var(--pi-f,brightness(1))!important;
+  transition:opacity .9s var(--pi-out),
+             transform 1.4s var(--pi-ios),
+             filter .8s var(--pi-ios)!important;
   will-change:opacity,transform,filter;
   backface-visibility:hidden;
 }
-@media(hover:none){img.pi[data-pi]{filter:blur(8px) grayscale(1) var(--pi-f,brightness(1))!important;}}
 img.pi[data-pi].pi-in{
   opacity:1!important;
   transform:scale(1)!important;
-  filter:blur(0) grayscale(0) var(--pi-f,brightness(1))!important;
+  filter:blur(0) var(--pi-f,brightness(1))!important;
 }
 
-/* 缓存命中的图：不走占位，只做一次短而干净的淡入 */
+/* 缓存命中的图：一次短淡入 */
 img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .45s var(--pi-out)!important;}
 /* 头像等小图：更轻 */
-.sb-av img.pi[data-pi],.mob-av img.pi[data-pi]{transform:scale(1.02)!important;filter:blur(5px) grayscale(1)!important;}
-.sb-av img.pi[data-pi].pi-in,.mob-av img.pi[data-pi].pi-in{transform:scale(1)!important;filter:blur(0) grayscale(0)!important;}
+.sb-av img.pi[data-pi],.mob-av img.pi[data-pi]{transform:scale(1.015)!important;filter:blur(2px)!important;}
+.sb-av img.pi[data-pi].pi-in,.mob-av img.pi[data-pi].pi-in{transform:scale(1)!important;filter:blur(0)!important;}
 
 @media (prefers-reduced-motion:reduce){
-  .pi-skel{animation:none!important;transition-duration:.01s!important}
   img.pi[data-pi]{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .25s linear!important}
   img.pi[data-pi].pi-in{filter:var(--pi-f,none)!important}
 }
@@ -5677,12 +5666,10 @@ document.addEventListener('keydown', e => {
 });
 </script>
 <script>
-/* Image loading v6：呼吸占位 → decode 后无色虚焦浮现 → 一条曲线完成对焦+上色 → 交还原 CSS */
+/* Image loading v7：静止底色占位 → decode 后一次性对焦浮现 → 交还原 CSS */
 (function(){
   var SEL='.gi img,.gi1 img,.sb-av img,.mob-av img,.blog-cover-img';
-  var PERIOD=2.6*2;
   var lastAt=0;
-  // 错峰：同时到达的图依次落定
   function stagger(fn){
     var now=performance.now(), at=Math.min(Math.max(now,lastAt+60),now+240);
     lastAt=at; setTimeout(fn,at-now);
@@ -5696,10 +5683,8 @@ document.addEventListener('keydown', e => {
       img.parentNode.insertBefore(slot,img); slot.appendChild(img); wrapped=true;
     } else {
       slot=img.parentElement;
-      if(getComputedStyle(slot).position==='static') slot.style.position='relative';
     }
 
-    // 已在缓存里：不做占位，一次短淡入
     if(img.complete && img.naturalWidth){
       img.classList.add('pi','pi-fast');
       requestAnimationFrame(function(){ requestAnimationFrame(function(){
@@ -5711,38 +5696,27 @@ document.addEventListener('keydown', e => {
     }
 
     img.classList.add('pi');
-    slot.classList.add('pi-slot');
-
-    var skel=document.createElement('div');
-    skel.className='pi-skel';
-    skel.style.setProperty('--pi-d',(-((performance.now()/1000)%PERIOD)).toFixed(3)+'s');
-    slot.insertBefore(skel,slot.firstChild);
-
     var shown=false, done=false;
     function finish(){
       if(done) return; done=true;
       img.removeEventListener('transitionend',onEnd);
-      img.classList.remove('pi','pi-in');   // 交还页面原有 CSS（hover 滤镜等）
-      if(skel.parentNode) skel.parentNode.removeChild(skel);
-      slot.classList.remove('pi-slot');
+      img.classList.remove('pi','pi-in');
     }
-    function onEnd(e){ if(e.target===img && e.propertyName==='filter') finish(); }
+    function onEnd(e){ if(e.target===img && e.propertyName==='opacity') finish(); }
     function reveal(){
       if(shown) return; shown=true;
       stagger(function(){
         requestAnimationFrame(function(){ requestAnimationFrame(function(){
           img.addEventListener('transitionend',onEnd);
           img.classList.add('pi-in');
-          skel.classList.add('pi-out');
           if(wrapped) slot.classList.add('pi-ready');
-          setTimeout(finish,1700);           // transitionend 的兜底
+          setTimeout(finish,1700);
         }); });
       });
     }
-    // 先 decode 再显示：解码在主线程之外完成，动画期间不再有解码卡顿
     function ready(){ if(img.decode){ img.decode().then(reveal,reveal); } else reveal(); }
     img.addEventListener('load',ready,{once:true});
-    img.addEventListener('error',function(){ img.classList.remove('pi'); if(skel.parentNode) skel.parentNode.removeChild(skel); slot.classList.remove('pi-slot'); },{once:true});
+    img.addEventListener('error',function(){ img.classList.remove('pi'); },{once:true});
   }
   function scan(n){
     if(!n || n.nodeType!==1) return;
