@@ -3310,7 +3310,19 @@ function _lbHideThumb(t){
 function _lbRestoreThumb(){
   if(_lbThumb){ _lbThumb.style.visibility = ''; _lbThumb = null; }
 }
+var _lbTail = null;    // 飞回「落地交接」阶段的句柄：{ fade: 灯箱图淡出动画, th: 缩略图, timer: 延迟定时器 }
+function _lbCancelTail(){
+  var t = _lbTail; if(!t) return; _lbTail = null;
+  if(t.timer){ clearTimeout(t.timer); t.timer = 0; }
+  if(t.fade){ var f = t.fade; t.fade = null; f.onfinish = null; try{ f.cancel(); }catch(e){} }
+  if(t.th){                                   // 缩略图的临时内联样式还给 CSS
+    t.th.style.willChange = '';
+    t.th.style.removeProperty('transition');
+    t.th.style.removeProperty('filter');
+  }
+}
 function _lbCancelAnim(){
+  _lbCancelTail();
   _lbStopTrack();
   _lbFlyState(false);
   if(_lbAnim){ var a = _lbAnim; _lbAnim = null; a.onfinish = null; try{ a.cancel(); }catch(e){} }
@@ -3622,6 +3634,7 @@ function _lbFlyOut(){
            ④ 整个交接期间保持 _lbFlying=true：滚动模糊 / 标题压缩等主线程任务继续让路，
               不会在淡入的同时抢帧；交接完成后才恢复 */
         var th = _lbThumb, IN = 180, OUT = 170, OVERLAP = 60;
+        var tail = _lbTail = { fade: null, th: th, timer: 0 };
         var restF = 'none';
         if(th){
           var tm = _lbMeta(th);
@@ -3636,6 +3649,8 @@ function _lbFlyOut(){
         }
         var fadeAnim = null;
         function _finish(){
+          if(_lbTail !== tail) return;               // 已被新的打开 / 关闭接管，不再收尾
+          _lbTail = null;
           if(fadeAnim){ try{ fadeAnim.cancel(); }catch(e){} fadeAnim = null; }
           img.style.opacity = '0';
           img.classList.remove('lb-fadein');
@@ -3650,12 +3665,14 @@ function _lbFlyOut(){
             th.style.removeProperty('filter');
           }
         }
-        setTimeout(function(){
-          if(anim.playState === 'idle') return;      // 期间被取消（又打开了灯箱 / 收尾定时器已清理）
+        tail.timer = setTimeout(function(){
+          tail.timer = 0;
+          if(_lbTail !== tail) return;               // 期间被取消（又打开了灯箱）
           try{
             fadeAnim = img.animate([{ opacity: 1 }, { opacity: 0 }],
                                    { duration: OUT, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' });
-            fadeAnim.onfinish = function(){ if(anim.playState !== 'idle') _finish(); };
+            tail.fade = fadeAnim;
+            fadeAnim.onfinish = function(){ _finish(); };
           }catch(e){ _finish(); }
         }, Math.max(0, IN - OVERLAP));
       };
