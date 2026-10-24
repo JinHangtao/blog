@@ -3196,18 +3196,28 @@ function _lbThumbOf(idx){
   var el = document.querySelector('[onclick="openLb('+idx+')"]');
   return el ? el.querySelector('img') : null;
 }
-// 缩略图是否真的在可视区域内（不在就别飞，降级为淡入淡出）
-function _lbThumbVisible(t){
-  if(!t) return false;
-  var r = t.getBoundingClientRect();
-  if(r.width < 8 || r.height < 8) return false;
-  if(r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) return false;
+// 缩略图真正"看得见"的区域：被 .main 卡片边界（含圆角外的留白）和吸顶 tab 栏截掉的部分不算
+function _lbVisRect(a){
+  var L = 0, T = 0, R = window.innerWidth, B = window.innerHeight;
   var m = document.querySelector('.main');
   if(m){
     var mr = m.getBoundingClientRect();
-    if(r.bottom <= mr.top + 20 || r.top >= mr.bottom - 20) return false;
+    L = Math.max(L, mr.left + 1); R = Math.min(R, mr.right - 1);
+    T = Math.max(T, mr.top + 1);  B = Math.min(B, mr.bottom - 1);
   }
-  return true;
+  var tb = document.querySelector('.topbar');
+  if(tb){ T = Math.max(T, tb.getBoundingClientRect().bottom); }
+  var l = Math.max(a.left, L), t = Math.max(a.top, T), r = Math.min(a.right, R), b = Math.min(a.bottom, B);
+  return { l:l, t:t, r:Math.max(l, r), b:Math.max(t, b) };
+}
+// 缩略图是否足够可见（被 tab 栏/边缘遮住太多就不飞，降级为淡入淡出）
+function _lbThumbVisible(t){
+  if(!t) return false;
+  var a = t.getBoundingClientRect();
+  if(a.width < 8 || a.height < 8) return false;
+  var v = _lbVisRect(a);
+  var frac = ((v.r - v.l) * (v.b - v.t)) / (a.width * a.height);
+  return frac >= 0.4;
 }
 function _lbHideThumb(t){
   if(_lbThumb && _lbThumb !== t) _lbThumb.style.visibility = '';
@@ -3235,9 +3245,15 @@ function _lbPose(t, b){
   var tx = (a.left + a.width / 2)  - (b.left + b.width / 2)  - s * pcx;
   var ty = (a.top  + a.height / 2) - (b.top  + b.height / 2) - s * pcy;
   var cardR = parseFloat(getComputedStyle(t.parentElement).borderRadius) || 10;
+  // 缩略图被 tab 栏 / 卡片边缘遮住的部分：折算进裁切框（不影响上面的位移计算），
+  // 这样起止点不会"穿"到 tab 栏或区块边距外面
+  var v = _lbVisRect(a);
+  var cL = (v.l - a.left) / s, cT = (v.t - a.top) / s, cR = (a.right - v.r) / s, cB = (a.bottom - v.b) / s;
+  var cut = (cL + cT + cR + cB) > 0.5;
+  left += cL; top += cT; right += cR; bottom += cB;
   return {
     transform: 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + s.toFixed(4) + ')',
-    clip: 'inset(' + top.toFixed(2) + 'px ' + right.toFixed(2) + 'px ' + bottom.toFixed(2) + 'px ' + left.toFixed(2) + 'px round ' + (cardR / s).toFixed(2) + 'px)',
+    clip: 'inset(' + top.toFixed(2) + 'px ' + right.toFixed(2) + 'px ' + bottom.toFixed(2) + 'px ' + left.toFixed(2) + 'px round ' + (cut ? 0 : cardR / s).toFixed(2) + 'px)',
     filter: getComputedStyle(t).filter || 'none'
   };
 }
