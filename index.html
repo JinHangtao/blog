@@ -3213,8 +3213,25 @@ function _lbFreeRect(t){
       B = Math.min(B, r.top  + n.clientTop  + n.clientHeight);
     }
   }
+  // 当前内容 panel 的边缘也作为裁切边界，避免飞行图片越过作品区块。
+  var panel = t && t.closest ? t.closest('.panel') : null;
+  if(panel){
+    var p = panel.getBoundingClientRect();
+    L = Math.max(L, p.left);
+    T = Math.max(T, p.top);
+    R = Math.min(R, p.right);
+    B = Math.min(B, p.bottom);
+  }
+  // 吸顶 tab 是独立前景层；仅在与可视区域重叠时压低上边界。
   var tb = document.querySelector('.topbar');
-  if(tb){ var q = tb.getBoundingClientRect(); if(q.right > L && q.left < R) T = Math.max(T, q.bottom); }
+  if(tb){
+    var q = tb.getBoundingClientRect();
+    if(q.bottom > T && q.top < B && q.right > L && q.left < R)
+      T = Math.max(T, q.bottom + 0.5);
+  }
+  // 亚像素安全余量，避免缩放时在边缘闪出细线。
+  var edge = 0.35;
+  L += edge; T += edge; R -= edge; B -= edge;
   return { l:L, t:T, r:Math.max(L, R), b:Math.max(T, B) };
 }
 function _lbUnion(W, b){   // 遮挡窗 ∪ 灯箱图矩形：灯箱图本身伸出窗口的部分（手机上高图常见）不能被误裁
@@ -3328,7 +3345,7 @@ function _lbTrack(anim, boxAnim, t, b, dir){
     if(t && t.isConnected !== false){
       var a = t.getBoundingClientRect();
       var W = _lbFreeRect(t);
-      var key = [a.left, a.top, a.width, a.height, W.l, W.t, W.r, W.b].map(function(v){ return Math.round(v * 10); }).join(',');
+      var key = [a.left, a.top, a.width, a.height, W.l, W.t, W.r, W.b, window.innerWidth, window.innerHeight].map(function(v){ return Math.round(v * 10); }).join(',');
       if(key !== last){
         last = key;
         if(a.width > 4 && a.height > 4){
