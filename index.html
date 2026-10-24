@@ -3302,13 +3302,43 @@ function _lbBoxFrames(a, dir){
   return dir === 'in' ? [{ clipPath: small }, { clipPath: full }]
                       : [{ clipPath: full },  { clipPath: small }];
 }
+/* 缩略图“隐藏”：不再整张 visibility:hidden。
+   被 sticky tab 栏盖住的那一截（飞行图永远不会盖到这里）保持可见、内容不变 ——
+   这样 tab 栏磨砂层采样到的像素在整个开/关灯箱过程中始终是同一份，落地时不再“闪一下”。 */
+function _lbApplyThumbStrip(t){
+  var tbEl = document.querySelector('.topbar');
+  if(!t || !tbEl) return;
+  var tb = tbEl.getBoundingClientRect(), a = t.getBoundingClientRect();
+  var k = Math.min(tb.bottom, a.bottom) - a.top;          // 缩略图顶部被 tab 栏盖住的高度
+  if(a.height > 0 && k > 0.5){
+    t.style.visibility = '';
+    t.style.clipPath = k >= a.height ? 'none' : 'inset(0px 0px ' + (a.height - k).toFixed(2) + 'px 0px)';
+  }else{
+    t.style.clipPath = '';
+    t.style.visibility = 'hidden';
+  }
+}
+function _lbClearThumbStrip(t){
+  if(!t) return;
+  t.style.visibility = '';
+  t.style.removeProperty('clip-path');
+}
+(function(){
+  var raf = 0;
+  function sync(){ raf = 0; if(_lbThumb) _lbApplyThumbStrip(_lbThumb); }
+  function bind(){
+    var m = document.querySelector('.main');
+    if(m) m.addEventListener('scroll', function(){ if(_lbThumb && !raf) raf = requestAnimationFrame(sync); }, {passive:true});
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
+})();
 function _lbHideThumb(t){
-  if(_lbThumb && _lbThumb !== t) _lbThumb.style.visibility = '';
+  if(_lbThumb && _lbThumb !== t) _lbClearThumbStrip(_lbThumb);
   _lbThumb = t || null;
-  if(t) t.style.visibility = 'hidden';
+  if(t) _lbApplyThumbStrip(t);
 }
 function _lbRestoreThumb(){
-  if(_lbThumb){ _lbThumb.style.visibility = ''; _lbThumb = null; }
+  if(_lbThumb){ _lbClearThumbStrip(_lbThumb); _lbThumb = null; }
 }
 function _lbCancelAnim(){
   _lbStopTrack();
@@ -3626,13 +3656,14 @@ function _lbFlyOut(){
         if(th){
           var tm = _lbMeta(th);
           restF = tm.rest || tm.filter || 'none';
+          // 与 CSS 静止态写法保持一致（pi-in 图带 blur(0)），释放钉子时不会产生任何滤镜差异
+          if(tm.rest && th.hasAttribute('data-pi') && th.classList.contains('pi-in') && !th.classList.contains('pi-fast')) restF = 'blur(0px) ' + tm.rest;
           th.style.setProperty('transition', 'filter 0s', 'important');
           th.style.setProperty('filter', restF, 'important');
           th.style.willChange = 'opacity';
-          _lbRestoreThumb();                         // visibility 还原（此时仍被飞行图盖住）
-          try{
-            th.animate([{ opacity: 0 }, { opacity: 1 }], { duration: IN, easing: 'cubic-bezier(.33,0,.2,1)' });
-          }catch(e){}
+          // 直接整张还原：露在 tab 栏下的那截本来就一直可见，其余部分在飞行图正下方（被完全盖住），
+          // 不再做 opacity 0→1（那会让磨砂区下的像素先消失再出现 = 闪烁）
+          _lbRestoreThumb();
         }
         var fadeAnim = null;
         function _finish(){
@@ -3644,10 +3675,19 @@ function _lbFlyOut(){
           if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
           _lbFromTf = '';
           _lbFlyState(false);
-          if(th){                                    // 滤镜交还给 CSS：静止态无变化；仍在 hover 时 .4s 平滑过渡
-            th.style.willChange = '';
-            th.style.removeProperty('transition');
-            th.style.removeProperty('filter');
+          if(th){
+            // 滤镜钉子保持到鼠标真正移动（或 1.8s 兜底）再交还 CSS：
+            // 关闭灯箱时鼠标多半还停在缩略图上，hover 滤镜(.82→.97 亮度)会在 tab 栏磨砂区下渐变 → 以前就是这里闪
+            var _rel = false;
+            var _go = function(){
+              if(_rel) return; _rel = true;
+              window.removeEventListener('pointermove', _go, true);
+              th.style.willChange = '';
+              th.style.removeProperty('transition');
+              th.style.removeProperty('filter');
+            };
+            setTimeout(function(){ window.addEventListener('pointermove', _go, true); }, 350);
+            setTimeout(_go, 1800);
           }
         }
         setTimeout(function(){
