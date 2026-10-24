@@ -844,12 +844,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   #lbSide[style*="opacity: 1"] .lb-desc,#lbSide[style*="opacity: 1"] .lb-rule{transform:none;transition:opacity .2s linear;transition-delay:0s}
 }
 .lb-col{display:flex;flex-direction:column;flex-shrink:0;}
-.lb-btns{display:flex;justify-content:space-between;align-items:center;padding:10px 0;opacity:0;transition:opacity .38s cubic-bezier(.32,.72,0,1);}
+.lb-btns{display:flex;justify-content:space-between;align-items:center;padding:10px 0;opacity:0;transition:none;}
 .lb-btns-left{display:flex;gap:4px;}
 .lb-btns button{background:transparent;border:1px solid var(--line2);color:var(--fg-d);width:22px;height:22px;cursor:none;font-size:.55rem;border-radius:6px;display:flex;align-items:center;justify-content:center;
   /* 三个属性用同一条曲线同一时长：颜色 / 描边 / 底色一起变，不会有的先亮有的后亮 */
-  transition:border-color .32s cubic-bezier(.32,.72,0,1),color .32s cubic-bezier(.32,.72,0,1),background-color .32s cubic-bezier(.32,.72,0,1);
-  -webkit-tap-highlight-color:transparent;outline:none;}
+  transition:border-color .32s cubic-bezier(.32,.72,0,1),color .32s cubic-bezier(.32,.72,0,1),background-color .32s cubic-bezier(.32,.72,0,1),opacity .14s ease-out,transform .14s ease-out;
+  -webkit-tap-highlight-color:transparent;outline:none;
+  opacity:0;transform:translateY(6px) scale(.88);}
+/* 灯箱落定后（JS 把 .lb-btns 设为 opacity:1）三个按钮依次浮现：← → ✕；同时保留颜色/描边的 hover 过渡 */
+.lb-btns[style*="opacity: 1"] button{opacity:1;transform:none;
+  transition:border-color .32s cubic-bezier(.32,.72,0,1),color .32s cubic-bezier(.32,.72,0,1),background-color .32s cubic-bezier(.32,.72,0,1),
+             opacity .5s cubic-bezier(.32,.72,0,1) var(--bd,0s),transform .6s cubic-bezier(.32,.72,0,1) var(--bd,0s);}
+#lbPrev{--bd:.16s}#lbNext{--bd:.22s}#lbClose{--bd:.28s}
+@media (prefers-reduced-motion:reduce){ .lb-btns button,.lb-btns[style*="opacity: 1"] button{transform:none;transition:opacity .2s linear;} }
 /* hover 只在真正有鼠标的设备上生效：触屏点一下后 :hover 会「粘住」，灯箱一打开按钮就直接亮金色（跳亮的主因之一） */
 @media (hover:hover) and (pointer:fine){
   .lb-btns button:hover{border-color:var(--gold);color:var(--gold);}
@@ -3563,7 +3570,7 @@ function _lbFlyIn(idx, tok){
   img.style.opacity = '';
   _lbCancelAnim();
   _lbFlyState(true);
-  var anim = _lbDrive(img, t, b, 'in', 380);    // 逐帧驱动：img + 遮挡窗同帧更新，实时跟随缩略图
+  var anim = _lbDrive(img, t, b, 'in', 440);    // 逐帧驱动：img + 遮挡窗同帧更新，实时跟随缩略图
   _lbAnimBox = anim; _lbAnim = anim;
   anim.onfinish = function(){
     _lbStopTrack();
@@ -3576,7 +3583,7 @@ function _lbFlyIn(idx, tok){
       img.style.opacity = '';
     }
   };
-  _lbShowSide(tok, 200);
+  _lbShowSide(tok, 240);
 }
 // 关闭：灯箱位置 → 缩略图原位。返回动画时长（0 = 没有飞，只淡出）
 function _lbFlyOut(){
