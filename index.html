@@ -3397,6 +3397,9 @@ function _lbFlyOut(){
   var img = document.getElementById('lbImg');
   var t   = _lbThumbOf(curLbIdx);
   _lbCancelAnim();
+  // 切图后 img 带着 .lb-fadein（CSS animation, fill:both 会一直把 opacity 钉在 1，
+  // 且优先级高于内联 style）。不先摘掉，飞回结束后设的 opacity:0 会被它盖住 → 屏幕中央闪一帧。
+  img.classList.remove('lb-fadein');
   // 只剩两种情况不飞：用户要求减少动态效果；或图片本身还没加载出来（没有东西可飞）
   var canFly = img.getAttribute('src') && img.style.opacity !== '0' && img.naturalWidth && !_lbReduced();
   if(canFly){
@@ -3419,6 +3422,8 @@ function _lbFlyOut(){
         _lbAnim = null;
         _lbRestoreThumb();            // 缩略图先现形
         img.style.opacity = '0';      // 灯箱图同帧消失，不会出现"两张图"
+        img.classList.remove('lb-fadein');   // 双保险：别让 CSS 动画把 opacity 顶回 1
+        img.style.visibility = 'hidden';     // 到 closeLb 的收尾定时器前彻底不可见
         try{ anim.cancel(); }catch(e){}
         if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
         _lbFromTf = '';
