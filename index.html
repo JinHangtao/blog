@@ -3186,7 +3186,7 @@ function _lbStop(){
 
 /* ══ 共享元素过渡（FLIP）：点击缩略图 → 原位飞入灯箱；关闭 → 飞回原位 ══ */
 var _lbAnim  = null;   // 当前飞行动画（WAAPI，作用在 #lbImg：位移/缩放/object-fit 裁切/圆角）
-var _lbAnimBox = null; // 屏幕空间"遮挡窗"动画（作用在不变换的 #lbImgBox：tab 栏 / 区块边距）
+var _lbAnimBox = null; // （已弃用：原 tab 栏避让遮挡窗，保留变量以兼容清理逻辑，恒为 null）
 var _lbThumb = null;   // 当前被隐藏的缩略图 <img>
 var _lbTok   = 0;      // 防竞态 token
 var _LB_EASE = 'cubic-bezier(.32,.72,0,1)';
@@ -3198,41 +3198,14 @@ function _lbThumbOf(idx){
   var el = document.querySelector('[onclick="openLb('+idx+')"]');
   return el ? el.querySelector('img') : null;
 }
-// ── 遮挡窗（屏幕坐标）：缩略图所在的"区块"里真正能画东西的矩形 ──
-// = 视口 ∩ 所有可滚动祖先（.main 卡片的内边距/边框之内）− 吸顶 tab 栏占掉的顶部。
-// 飞行中的图片必须始终被这个窗口裁住，才会像"从区块里钻出来 / 钻回区块里"，而不是盖在 tab 栏上穿插。
-function _lbFreeRect(t){
-  var L = 0, T = 0, R = window.innerWidth, B = window.innerHeight;
-  for(var n = t && t.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement){
-    var cs = getComputedStyle(n);
-    if(/auto|scroll|overlay/.test(cs.overflowX + ' ' + cs.overflowY)){
-      var r = n.getBoundingClientRect();
-      L = Math.max(L, r.left + n.clientLeft);                  // clientLeft/Top = 边框，clientWidth/Height = 内容+内边距
-      T = Math.max(T, r.top  + n.clientTop);
-      R = Math.min(R, r.left + n.clientLeft + n.clientWidth);
-      B = Math.min(B, r.top  + n.clientTop  + n.clientHeight);
-    }
-  }
-  var tb = document.querySelector('.topbar');
-  if(tb){ var q = tb.getBoundingClientRect(); if(q.right > L && q.left < R) T = Math.max(T, q.bottom); }
-  return { l:L, t:T, r:Math.max(L, R), b:Math.max(T, B) };
-}
-function _lbUnion(W, b){   // 遮挡窗 ∪ 灯箱图矩形：灯箱图本身伸出窗口的部分（手机上高图常见）不能被误裁
-  return { l:Math.min(W.l, b.left), t:Math.min(W.t, b.top), r:Math.max(W.r, b.right), b:Math.max(W.b, b.bottom) };
-}
-// 屏幕矩形 W → #lbImgBox 局部坐标的 clip-path:inset()。#lbImgBox 自己没有 transform，所以这个裁切永远是"屏幕固定"的、直角的
-function _lbWinClip(box, W){
-  return 'inset(' + (W.t - box.top).toFixed(1) + 'px ' + (box.right - W.r).toFixed(1) + 'px ' +
-                    (box.bottom - W.b).toFixed(1) + 'px ' + (W.l - box.left).toFixed(1) + 'px)';
-}
-// 缩略图是否足够可见（被 tab 栏/边缘遮住太多就不飞，降级为淡入淡出）
+// 缩略图是否在视口里有足够可见面积（只看视口；tab 栏不再参与判断，图片直接飞）
 function _lbThumbVisible(t){
   if(!t) return false;
   var a = t.getBoundingClientRect();
   if(a.width < 8 || a.height < 8) return false;
-  var W = _lbFreeRect(t);
-  var w = Math.min(a.right, W.r) - Math.max(a.left, W.l), h = Math.min(a.bottom, W.b) - Math.max(a.top, W.t);
-  return w > 0 && h > 0 && (w * h) / (a.width * a.height) >= 0.4;
+  var w = Math.min(a.right, window.innerWidth) - Math.max(a.left, 0);
+  var h = Math.min(a.bottom, window.innerHeight) - Math.max(a.top, 0);
+  return w > 0 && h > 0 && (w * h) / (a.width * a.height) >= 0.25;
 }
 function _lbHideThumb(t){
   if(_lbThumb && _lbThumb !== t) _lbThumb.style.visibility = '';
@@ -3250,7 +3223,7 @@ function _lbCancelAnim(){
 // 计算：把灯箱图（矩形 b）变换成"缩略图（矩形 a）里看到的样子"
 // 缩略图是 object-fit:cover 裁切的，所以用 scale(cover) + clip-path 裁掉多余部分，圆角同步缩放。
 // 被 tab 栏 / 区块边距遮住的部分【不】在这里处理（这里的裁切跟着 transform 走，飞行中会漂移），
-// 统一交给 _lbWinAnim 的屏幕空间遮挡窗。
+// （tab 栏避让已移除：图片直接飞，不再被裁切。）
 function _lbPose(t, b){
   var a  = t.getBoundingClientRect();
   var s  = Math.max(a.width / b.width, a.height / b.height);
@@ -3265,6 +3238,7 @@ function _lbPose(t, b){
   var ty = (a.top  + a.height / 2) - (b.top  + b.height / 2) - s * pcy;
   var cardR = parseFloat(getComputedStyle(t.parentElement).borderRadius) || 10;
   return {
+    tx: tx, ty: ty, s: s,
     transform: 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + s.toFixed(4) + ')',
     clip: 'inset(' + top.toFixed(2) + 'px ' + right.toFixed(2) + 'px ' + bottom.toFixed(2) + 'px ' + left.toFixed(2) + 'px round ' + (cardR / s).toFixed(2) + 'px)',
     filter: getComputedStyle(t).filter || 'none'
@@ -3281,28 +3255,26 @@ function _lbShowSide(tok, delay){
     var _b = document.querySelector('.lb-btns'); if(_b) _b.style.opacity = '1';
   }, delay);
 }
-// 屏幕空间遮挡窗动画（作用在不随图片变换的 #lbImgBox 上）：
-//  · 飞入：起点 = 缩略图所在区块的可画区域 W，保持到 35%（此时图片已飞完约 8 成、背景已压暗），再放开到 E（W ∪ 灯箱图）
-//  · 飞回：镜像 —— 先从 E 收紧到 W（前 30%，此时背景还很黑，tab 栏看不见），之后一直被 W 裁住，图片就会"钻到 tab 栏 / 区块边缘下面"落回原位
-//  灯箱图完全落在 W 内（桌面端常见）时 E == W，全程不会有任何跳变。
-function _lbWinFrames(W, b, dir){
-  var box = document.getElementById('lbImgBox');
-  var r   = box.getBoundingClientRect();           // #lbImgBox 自身无 transform，clip-path 也不影响它的矩形 → 可随时重测
-  var cw  = _lbWinClip(r, W), ce = _lbWinClip(r, _lbUnion(W, b));
-  var ease = 'cubic-bezier(.4,0,.2,1)';
-  return (dir === 'in')
-    ? [{ clipPath: cw }, { clipPath: cw, offset: .35, easing: ease }, { clipPath: ce }]
-    : [{ clipPath: ce, easing: 'cubic-bezier(.2,.6,.2,1)' }, { clipPath: cw, offset: .3 }, { clipPath: cw }];
-}
-function _lbWinAnim(W, b, dir, dur){
-  var box = document.getElementById('lbImgBox');
-  return box.animate(_lbWinFrames(W, b, dir), { duration: dur, easing: 'linear', fill: dir === 'in' ? 'backwards' : 'forwards' });
-}
 // 图片本体的关键帧：灯箱位 ⇄ 缩略图位（p = _lbPose 的结果）
+// 飞行路径不是直线：中间帧向路径法线方向偏出一小段（弧线），偏出量随距离变化——
+// 近的小弧、远的大弧但封顶，并且总是朝"上方/外侧"鼓起，看起来像被抛出去/收回来，而不是机械直线平移。
+var _LB_ARC_K   = 0.10;   // 弧高 = 飞行距离 × 该系数
+var _LB_ARC_MAX = 46;     // 弧高上限（px）
+var _LB_MID_GROW = 0.55;  // 中间帧缩放进度：0=缩略图大小，1=灯箱大小（>0.5 → 图片更早放大，落地更利落）
+function _lbMidTransform(p){
+  var d = Math.hypot(p.tx, p.ty) || 1;
+  var nx = -p.ty / d, ny = p.tx / d;               // 路径法线
+  if(ny > 0){ nx = -nx; ny = -ny; }                // 统一朝上鼓
+  var h = Math.min(d * _LB_ARC_K, _LB_ARC_MAX);
+  var mx = p.tx * 0.5 + nx * h, my = p.ty * 0.5 + ny * h;
+  var ms = p.s + (1 - p.s) * _LB_MID_GROW;
+  return 'translate(' + mx.toFixed(2) + 'px,' + my.toFixed(2) + 'px) scale(' + ms.toFixed(4) + ')';
+}
 function _lbImgFrames(img, p, dir){
   var full  = { transform: 'none', clipPath: _lbEndClip(img), filter: 'none' };
   var thumb = { transform: p.transform, clipPath: p.clip, filter: p.filter };
-  return dir === 'in' ? [thumb, full] : [full, thumb];
+  var mid   = { transform: _lbMidTransform(p), offset: 0.5 };
+  return dir === 'in' ? [thumb, mid, full] : [full, mid, thumb];
 }
 
 /* ── 实时跟随：飞行期间每帧重读缩略图的屏幕位置，把动画「缩略图一端」的关键帧重定向 ──
@@ -3315,7 +3287,7 @@ var _lbTrackRaf = 0;
 function _lbStopTrack(){
   if(_lbTrackRaf){ cancelAnimationFrame(_lbTrackRaf); _lbTrackRaf = 0; }
 }
-function _lbTrack(anim, boxAnim, t, b, dir){
+function _lbTrack(anim, t, b, dir){
   _lbStopTrack();
   if(!(anim && anim.effect && anim.effect.setKeyframes)) return;   // 不支持就退回原来的静态行为
   var img = document.getElementById('lbImg');
@@ -3327,16 +3299,12 @@ function _lbTrack(anim, boxAnim, t, b, dir){
     if(st === 'finished' || st === 'idle') return;
     if(t && t.isConnected !== false){
       var a = t.getBoundingClientRect();
-      var W = _lbFreeRect(t);
-      var key = [a.left, a.top, a.width, a.height, W.l, W.t, W.r, W.b].map(function(v){ return Math.round(v * 10); }).join(',');
+      var key = [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 10); }).join(',');
       if(key !== last){
         last = key;
         if(a.width > 4 && a.height > 4){
           try{
             anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b), dir));
-            if(boxAnim && _lbAnimBox === boxAnim && boxAnim.effect && boxAnim.effect.setKeyframes){
-              boxAnim.effect.setKeyframes(_lbWinFrames(W, b, dir));
-            }
           }catch(e){}
         }
       }
@@ -3358,14 +3326,12 @@ function _lbFlyIn(idx, tok){
     _lbShowSide(tok, 0);
     return;
   }
-  var p = _lbPose(t, b);
-  var W = _lbFreeRect(t);                // 先量，再隐藏缩略图
+  var p = _lbPose(t, b);                 // 先量，再隐藏缩略图
   _lbHideThumb(t);
   img.style.opacity = '';
   _lbCancelAnim();
   var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
   _lbAnim = anim;
-  _lbAnimBox = _lbWinAnim(W, b, 'in', 520);
   anim.onfinish = function(){
     _lbStopTrack();
     if(_lbAnim === anim){
@@ -3376,7 +3342,7 @@ function _lbFlyIn(idx, tok){
       img.style.opacity = '';
     }
   };
-  _lbTrack(anim, _lbAnim && _lbAnimBox, t, b, 'in');
+  _lbTrack(anim, t, b, 'in');
   _lbShowSide(tok, 300);
 }
 // 关闭：灯箱位置 → 缩略图原位。返回动画时长（0 = 没有飞，只淡出）
@@ -3390,11 +3356,9 @@ function _lbFlyOut(){
     var b = img.getBoundingClientRect();
     if(b.width > 4 && b.height > 4){
       var p = _lbPose(t, b);
-      var W = _lbFreeRect(t);
       var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
       _lbAnim = anim;
-      _lbAnimBox = _lbWinAnim(W, b, 'out', 460);
-      _lbTrack(anim, _lbAnimBox, t, b, 'out');
+      _lbTrack(anim, t, b, 'out');
       anim.onfinish = function(){
         _lbStopTrack();
         if(_lbAnim !== anim) return;
