@@ -211,10 +211,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   --ease-ios:cubic-bezier(.32,.72,0,1);
   --ease-out:cubic-bezier(.22,1,.36,1);
   --spring:var(--ease-ios);
+  --spring-pop:cubic-bezier(.34,1.56,.64,1);
   --blur-in:12px;
 }
 @supports (animation-timing-function:linear(0,1)){
   :root{--spring:linear(0,0.008,0.0297,0.0622,0.1031,0.15,0.2012,0.255,0.3101,0.3655,0.4201,0.4734,0.5247,0.5737,0.6199,0.6633,0.7037,0.741,0.7753,0.8066,0.8349,0.8604,0.8833,0.9037,0.9216,0.9374,0.9512,0.9632,0.9734,0.9821,0.9895,0.9956,1.0006,1.0047,1.008,1.0105,1.0123,1.0137,1.0145,1.015,1.0152,1.0151,1.0147,1.0143,1);}
+}
+@supports (animation-timing-function:linear(0,1)){
+  :root{--spring-pop:linear(0,0.0142,0.0531,0.1113,0.1839,0.2663,0.3545,0.4452,0.5353,0.6225,0.7049,0.781,0.85,0.911,0.9638,1.0084,1.045,1.074,1.0959,1.1113,1.121,1.1256,1.126,1.1228,1.1168,1.1087,1.0989,1.0882,1.0768,1.0654,1.0541,1.0433,1.0332,1.024,1.0157,1.0084,1.0021,0.9969,0.9927,0.9894,0.987,0.9854,0.9844,0.984,0.9842,0.9848,0.9856,0.9868,1);}
 }
 @media(hover:none){:root{--blur-in:7px;}}
 
@@ -228,7 +232,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   transform-origin:50% 0;
   animation:
     mainFade .8s var(--ease-out) .12s both,
-    mainBlur .9s var(--ease-out) .12s both,
     mainMove 1.4s var(--spring) .12s both;
 }
 @keyframes sbFade{from{opacity:0;}to{opacity:1;}}
@@ -237,10 +240,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   to  {transform:translateX(0) scale(1);}
 }
 @keyframes mainFade{from{opacity:0;}to{opacity:1;}}
-@keyframes mainBlur{
-  from{filter:blur(calc(var(--blur-in) * .5));}
-  to  {filter:none;}
-}
 @keyframes mainMove{
   from{transform:translateX(14px) scale(.99);}
   to  {transform:translateX(0) scale(1);}
@@ -252,23 +251,23 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
     itemFade .7s var(--ease-out) backwards,
     itemBlur .85s var(--ease-out) backwards,
     itemMove 1.1s var(--spring) backwards;
-  animation-delay:calc(var(--i,0) * 90ms + 140ms);
+  animation-delay:var(--d,480ms);
 }
-.sb > *:nth-child(1){--i:0}
-.sb > *:nth-child(2){--i:1}
-.sb > *:nth-child(3){--i:2}
-.sb > *:nth-child(4){--i:3}
-.sb > *:nth-child(5){--i:4}
+/* 主体（头像卡）最先、最清晰；次要卡片更晚、更虚 */
+.sb > *:nth-child(1){--d:40ms; --b:calc(var(--blur-in) * .5);}
+.sb > *:nth-child(2){--d:300ms;--b:calc(var(--blur-in) * 1.2);}
+.sb > *:nth-child(3){--d:400ms;--b:calc(var(--blur-in) * 1.2);}
+.sb > *:nth-child(n+4){--d:480ms;--b:calc(var(--blur-in) * 1.2);}
 @keyframes itemFade{from{opacity:0;}}
-@keyframes itemBlur{from{filter:blur(var(--blur-in));}}
+@keyframes itemBlur{from{filter:blur(var(--b,var(--blur-in)));}}
 @keyframes itemMove{from{transform:translateY(12px) scale(.98);}}
 
 /* 背景星空：虚焦 + 微放大 → 慢慢对焦（用独立的 scale 属性，不影响视差 transform） */
 .reveal-ready #starsBg{
   animation:
-    bgFade 1.8s var(--ease-out) both,
-    bgBlur 2.4s var(--ease-out) both,
-    bgScale 3.2s var(--ease-ios) both;
+    bgFade 1.1s var(--ease-out) both,
+    bgBlur 1.8s var(--ease-out) both,
+    bgScale 2.2s var(--ease-ios) both;
 }
 @keyframes bgFade{from{opacity:0;}to{opacity:1;}}
 @keyframes bgBlur{from{filter:blur(calc(var(--blur-in) * 2));}to{filter:none;}}
@@ -277,12 +276,20 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* about panel 内容逐段错开 */
 .ph-reveal{
   opacity:0;
-  transform:translateY(16px) scale(.992);
-  filter:blur(var(--blur-in));
-  transition:opacity .7s var(--ease-out),
-             filter .85s var(--ease-out),
-             transform 1.2s var(--spring);
+  transform:translateY(18px) scale(.992);
+  filter:blur(calc(var(--blur-in) * 1.2));
+  transition:opacity .8s var(--ease-out),
+             filter 1s var(--ease-out),
+             transform 1.25s var(--spring);
   will-change:opacity,transform,filter;
+}
+/* 标题块：主体，最先出现，模糊更轻，对焦更快 */
+.ph-reveal.ph-focal{
+  transform:translateY(10px) scale(.996);
+  filter:blur(calc(var(--blur-in) * .5));
+  transition:opacity .55s var(--ease-out),
+             filter .65s var(--ease-out),
+             transform 1.1s var(--spring);
 }
 .ph-reveal.in{
   opacity:1;
@@ -297,8 +304,16 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   to{   border-radius: 13px; }
 }
 .reveal-ready .sb-av{
-  animation: avReveal .9s cubic-bezier(0,0,.18,1) .08s both;
+  animation:
+    avReveal .9s cubic-bezier(0,0,.18,1) .08s both,
+    avPopScale 1.3s var(--spring-pop) .06s backwards,
+    avPopFade .5s var(--ease-out) .06s backwards,
+    avPopBlur .7s var(--ease-out) .06s backwards;
 }
+/* 用独立的 scale 属性，不会覆盖头像磁吸效果用的 transform */
+@keyframes avPopScale{from{scale:.78;}}
+@keyframes avPopFade{from{opacity:0;}}
+@keyframes avPopBlur{from{filter:blur(calc(var(--blur-in) * .9));}}
 .sb{
   width:var(--sw);flex-shrink:0;
   display:flex;flex-direction:column;gap:8px;
@@ -1753,12 +1768,17 @@ img.pi[data-pi].pi-in{
 /* Lightbox: plain fade, thin neutral ring */
 .lb-img img.lb-fadein{animation:lbFadeIn .35s cubic-bezier(.25,.1,.25,1) forwards;}
 @media (prefers-reduced-motion:reduce){
-  .reveal-ready .sb,.reveal-ready .main,.reveal-ready .sb > *,.reveal-ready #starsBg{
+  .reveal-ready .sb,.reveal-ready .main,.reveal-ready .sb > *,.reveal-ready #starsBg,.reveal-ready .sb-av{
     animation-duration:.2s!important;animation-delay:0s!important;
   }
-  .reveal-ready .sb,.reveal-ready .main,.reveal-ready .sb > *,.reveal-ready #starsBg,
+  .reveal-ready .sb,.reveal-ready .main,.reveal-ready .sb > *,.reveal-ready #starsBg,.reveal-ready .sb-av,
   .ph-reveal,.ph-word,.ph-n,.ph-sub{filter:none!important;}
+  .reveal-ready .sb-av{scale:none!important;}
   .ph-reveal,.ph-word{transition-duration:.2s!important;transform:none!important;}
+}
+/* 进场期间被打断：之后新触发的过渡直接快进收尾 */
+.intro-skip .ph-reveal,.intro-skip .ph-word,.intro-skip .ph-n,.intro-skip .ph-sub,.intro-skip .ph-rule{
+  transition-duration:.28s!important;transition-delay:0s!important;
 }
 </style>
 <script>
@@ -4245,10 +4265,17 @@ function triggerStmtPoem(){
   });
 
   var t=0;
+  var _tPrev=performance.now(), _pT=0;
+  var _reduceMo=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   function draw(){
     requestAnimationFrame(draw);
     if(window._lbOpen) return;
     t+=0.01;
+    // 星球进场：星星先出现，星球稍后再淡入（被打断时加速）
+    var _now=performance.now(), _dt=Math.min(64,_now-_tPrev); _tPrev=_now;
+    _pT+=_dt*(window.__introSkip?3.5:1);
+    var _pk=Math.max(0,Math.min(1,(_pT-450)/1300)); _pk=_pk*_pk*(3-2*_pk);
+    if(_reduceMo) _pk=1;
     ctx.clearRect(0,0,W,H);
 
     // ── 星星 ──
@@ -4298,6 +4325,8 @@ function triggerStmtPoem(){
     });
 
     // ── 星球 ──
+    if(_pk>0.003){
+    ctx.save(); ctx.globalAlpha=_pk;
     pl.rot+=0.0006; pl.rRot+=0.0004;
     var isMob=W<768;
     var r=isMob?pl.r*0.65:pl.r;
@@ -4397,6 +4426,8 @@ function triggerStmtPoem(){
       });
     });
     ctx.restore();
+    ctx.restore();
+    }
   }
   draw();
 })();
@@ -4668,21 +4699,60 @@ window.applyBlogCollapse = function(root){
   document.documentElement.classList.add('reveal-ready');
 
   // stagger 错开：侧边栏 0ms，主区域 120ms，about 内容 220ms 起每隔 55ms
-  var items = document.querySelectorAll('#p-about .ph-reveal');
-  items.forEach(function(el, i){
+  var items = Array.prototype.slice.call(document.querySelectorAll('#p-about .ph-reveal'));
+  var timers = [], reveals = [], k = 0;
+
+  items.forEach(function(el){
+    // 标题块是主体：最先、最轻；其余内容更晚、更虚
+    var focal = el.classList.contains('ph');
+    if(focal) el.classList.add('ph-focal');
+    var delay = focal ? 180 : 420 + Math.min(k,8) * 65 + Math.max(0,k-8) * 26;
+    if(!focal) k++;
+
     // 保存行内 opacity 原值（如 "0.5"），动画结束后还原
     var inlineOpacity = el.style.opacity;
     if(inlineOpacity) el.style.opacity = '0';
-    setTimeout(function(){
+
+    var fired = false;
+    function go(){
+      if(fired) return; fired = true;
       el.classList.add('in');
-      // 动画结束后还原行内 opacity
       if(inlineOpacity){
-        setTimeout(function(){
-          el.style.opacity = inlineOpacity;
-        }, 1000); // 比 opacity transition 时长稍长
+        timers.push(setTimeout(function(){ el.style.opacity = inlineOpacity; }, 1000));
       }
-    }, 260 + Math.min(i,8) * 70 + Math.max(0,i-8) * 28);
+    }
+    reveals.push(go);
+    timers.push(setTimeout(go, delay));
   });
+
+  // ── 进场被打断（点击 / 滚动 / 按键）：不卡住，平滑快进收尾 ──
+  var introOver = false, sped = false;
+  var INTRO_SEL = '.sb,.main,.sb > *,#starsBg,.sb-av,.ph-reveal,.ph-word,.ph-n,.ph-sub,.ph-rule';
+  var EVTS = ['pointerdown','keydown','wheel','touchstart'];
+
+  function stopListening(){
+    introOver = true;
+    EVTS.forEach(function(n){ window.removeEventListener(n, speedUp, true); });
+  }
+  function speedUp(){
+    if(sped || introOver) return;
+    sped = true;
+    window.__introSkip = true;
+    document.documentElement.classList.add('intro-skip');
+    reveals.forEach(function(f){ f(); });          // 还没开始的块立刻开始
+    try{
+      document.getAnimations().forEach(function(a){
+        var t = a.effect && a.effect.target;
+        if(!t || !t.matches || !t.matches(INTRO_SEL)) return;
+        if(a.effect.getComputedTiming().iterations === Infinity) return;
+        a.updatePlaybackRate(3.5);                  // 进行中的动画 3.5 倍速收尾
+      });
+    }catch(e){}
+    setTimeout(function(){ document.documentElement.classList.remove('intro-skip'); }, 900);
+    stopListening();
+  }
+  EVTS.forEach(function(n){ window.addEventListener(n, speedUp, {capture:true, passive:true}); });
+  setTimeout(stopListening, 3200);
 })();
 
   // ── console easter egg ──
