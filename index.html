@@ -792,6 +792,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .5s;}
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
 .lb.on .lb-img img{visibility:visible}
+.lb.lb-flying .lb-img img{box-shadow:none !important;will-change:transform,clip-path;backface-visibility:hidden;}
+.lb.lb-flying .lb-img{will-change:clip-path;}
 .lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);opacity:0;transition:opacity .42s cubic-bezier(.4,0,.2,1);}
 .lb.on .lb-bg{opacity:1}
 .lb-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:0;justify-content:center;margin-top:4vh;}
@@ -2696,7 +2698,7 @@ if(isTouch){
 
   (function tick(){
     requestAnimationFrame(tick);
-    if(window._lbOpen) return;
+    if(window._lbOpen||window._lbFlying) return;
     target = getTarget();
     // lerp speed: fast when scrolling down, slightly slower coming back up
     var speed = target > cur ? 0.12 : 0.08;
@@ -3189,7 +3191,11 @@ var _lbAnim  = null;   // 当前飞行动画（WAAPI，作用在 #lbImg：位移
 var _lbAnimBox = null; // （已弃用：原 tab 栏避让遮挡窗，保留变量以兼容清理逻辑，恒为 null）
 var _lbThumb = null;   // 当前被隐藏的缩略图 <img>
 var _lbTok   = 0;      // 防竞态 token
-var _lbFromTf = '';    // 飞回的起点 transform（灯箱里放大 / 平移过时 = 当时的内联 transform，否则空）
+var _lbFromTf = '';
+function _lbFlyState(on){
+  window._lbFlying = !!on;
+  var e = document.getElementById('lb'); if(e) e.classList.toggle('lb-flying', !!on);
+}    // 飞回的起点 transform（灯箱里放大 / 平移过时 = 当时的内联 transform，否则空）
 var _LB_EASE = 'cubic-bezier(.32,.72,0,1)';
 
 function _lbReduced(){
@@ -3263,6 +3269,7 @@ function _lbRestoreThumb(){
 }
 function _lbCancelAnim(){
   _lbStopTrack();
+  _lbFlyState(false);
   if(_lbAnim){ var a = _lbAnim; _lbAnim = null; a.onfinish = null; try{ a.cancel(); }catch(e){} }
   if(_lbAnimBox){ var c = _lbAnimBox; _lbAnimBox = null; c.onfinish = null; try{ c.cancel(); }catch(e){} }
 }
@@ -3330,27 +3337,38 @@ function _lbImgFrames(img, p, dir){
    现在 setKeyframes 保留当前进度（currentTime 不变），只改缩略图那一端 → 图片始终朝「此刻」的缩略图飞，
    滚多快都平滑贴合；遮挡窗(tab 栏/区块边距)也同步重算。 */
 var _lbTrackRaf = 0;
+var _lbDirty = false;
+function _lbMarkDirty(){ _lbDirty = true; }
+['scroll','resize','touchmove','wheel'].forEach(function(n){
+  window.addEventListener(n, _lbMarkDirty, {passive:true, capture:true});
+});
 function _lbStopTrack(){
   if(_lbTrackRaf){ cancelAnimationFrame(_lbTrackRaf); _lbTrackRaf = 0; }
 }
 function _lbTrack(anim, t, b, dir){
   _lbStopTrack();
-  if(!(anim && anim.effect && anim.effect.setKeyframes)) return;   // 不支持就退回原来的静态行为
+  if(!(anim && anim.effect && anim.effect.setKeyframes)) return;
   var img = document.getElementById('lbImg');
-  var last = '';
+  var last = '', idle = 0;
+  _lbDirty = false;
   (function tick(){
     _lbTrackRaf = 0;
     if(_lbAnim !== anim) return;
     var st = anim.playState;
     if(st === 'finished' || st === 'idle') return;
-    var a = _lbThumbRect(t, b);
-    var key = [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 10); }).join(',');
-    if(key !== last){
-      last = key;
-      try{
-        anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b, a), dir));
-        if(_lbAnimBox && _lbAnimBox.effect) _lbAnimBox.effect.setKeyframes(_lbBoxFrames(a, dir));
-      }catch(e){}
+    // 没有滚动 / 缩放事件就完全不碰布局（原来每帧 3 次 getBoundingClientRect + setKeyframes）
+    // 惯性滚动没有事件时，每 6 帧兜底检查一次
+    if(_lbDirty || (++idle % 6 === 0)){
+      _lbDirty = false;
+      var a = _lbThumbRect(t, b);
+      var key = [a.left, a.top, a.width, a.height].map(function(v){ return Math.round(v * 2); }).join(',');
+      if(key !== last){
+        last = key;
+        try{
+          anim.effect.setKeyframes(_lbImgFrames(img, _lbPose(t, b, a), dir));
+          if(_lbAnimBox && _lbAnimBox.effect) _lbAnimBox.effect.setKeyframes(_lbBoxFrames(a, dir));
+        }catch(e){}
+      }
     }
     _lbTrackRaf = requestAnimationFrame(tick);
   })();
@@ -3375,6 +3393,7 @@ function _lbFlyIn(idx, tok){
   _lbHideThumb(t);
   img.style.opacity = '';
   _lbCancelAnim();
+  _lbFlyState(true);
   _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(a, 'in'),
     { duration: 520, easing: _LB_EASE, fill: 'backwards' });   // 起点：只露出缩略图可见的那一块
   var anim = img.animate(_lbImgFrames(img, p, 'in'), { duration: 520, easing: _LB_EASE, fill: 'backwards' });
@@ -3383,6 +3402,7 @@ function _lbFlyIn(idx, tok){
     _lbStopTrack();
     if(_lbAnim === anim){
       _lbAnim = null;
+      _lbFlyState(false);
       try{ anim.cancel(); }catch(e){}
       if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
       var bx = document.getElementById('lbImgBox'); if(bx) bx.style.clipPath = '';
@@ -3411,6 +3431,7 @@ function _lbFlyOut(){
       var a = _lbThumbRect(t, b);
       var p = _lbPose(t, b, a);
       _lbFromTf = curTf || '';
+      _lbFlyState(true);
       _lbAnimBox = document.getElementById('lbImgBox').animate(_lbBoxFrames(a, 'out'),
         { duration: 460, easing: _LB_EASE, fill: 'forwards' });   // 终点：收进缩略图可见的那一块（钻回 tab 栏下面）
       var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
@@ -3420,6 +3441,7 @@ function _lbFlyOut(){
         _lbStopTrack();
         if(_lbAnim !== anim) return;
         _lbAnim = null;
+        _lbFlyState(false);
         _lbRestoreThumb();            // 缩略图先现形
         img.style.opacity = '0';      // 灯箱图同帧消失，不会出现"两张图"
         img.classList.remove('lb-fadein');   // 双保险：别让 CSS 动画把 opacity 顶回 1
@@ -4679,7 +4701,7 @@ function triggerStmtPoem(){
   var _reduceMo=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   function draw(){
     requestAnimationFrame(draw);
-    if(window._lbOpen) return;
+    if(window._lbOpen||window._lbFlying) return;
     t+=0.01;
     // 星球进场：星星先出现，星球稍后再淡入（被打断时加速）
     var _now=performance.now(), _dt=Math.min(64,_now-_tPrev); _tPrev=_now;
@@ -4864,7 +4886,7 @@ function triggerStmtPoem(){
   var _lastT='';
   (function tick(){
     requestAnimationFrame(tick);
-    if(window._lbOpen) return;
+    if(window._lbOpen||window._lbFlying) return;
     cx+=(tx-cx)*0.04;
     cy+=(ty-cy)*0.04;
     var v='translate('+Math.round(cx)+'px,'+Math.round(cy)+'px)';
