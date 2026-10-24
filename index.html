@@ -3402,9 +3402,25 @@ function _lbDrive(img, t, b, dir, dur){
   var prevTr = img.style.transition;
   img.style.transition = 'none';                       // 防止残留的 CSS transition 把每帧写入再平滑一遍（=额外延迟）
 
+  // ── 飞行期间锁滚动（业界做法：PhotoSwipe 等灯箱库都不在飞行中跟随滚动）──
+  //    飞行只有 ~0.5s，锁住后缩略图位置恒定，不再有「主线程读到旧位置」的延迟，动画必然顺滑。
+  //    用事件拦截而不是改 overflow：改 overflow 会让滚动条消失、布局位移，缩略图位置就变了。
+  function _stopScroll(e){ if(e.ctrlKey) return; if(e.cancelable) e.preventDefault(); }
+  var _scrollKeys = { 32: 1, 33: 1, 34: 1, 35: 1, 36: 1, 38: 1, 40: 1 };
+  function _stopKey(e){ if(_scrollKeys[e.keyCode]) e.preventDefault(); }
+  window.addEventListener('wheel',     _stopScroll, { passive: false, capture: true });
+  window.addEventListener('touchmove', _stopScroll, { passive: false, capture: true });
+  window.addEventListener('keydown',   _stopKey,    { passive: false, capture: true });
+  function _unlockScroll(){
+    window.removeEventListener('wheel',     _stopScroll, { capture: true });
+    window.removeEventListener('touchmove', _stopScroll, { capture: true });
+    window.removeEventListener('keydown',   _stopKey,    { capture: true });
+  }
+
   var h = { playState: 'running', onfinish: null, effect: null, _raf: 0, _dead: false };
   h.cancel = function(){
     if(h._dead) return; h._dead = true;
+    _unlockScroll();
     if(h._raf){ cancelAnimationFrame(h._raf); h._raf = 0; }
     h.playState = 'idle';
     img.style.transform = ''; img.style.clipPath = ''; img.style.filter = ''; img.style.transition = prevTr;
@@ -3465,6 +3481,7 @@ function _lbDrive(img, t, b, dir, dur){
 
     if(p >= 1){
       h.playState = 'finished';
+      _unlockScroll();
       var f = h.onfinish; if(f) f.call(h);
       return;
     }
