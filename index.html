@@ -1729,14 +1729,31 @@ button, a, input, label, [onclick], video {
 .gi img,.gi1 img{--pi-f:brightness(.82) saturate(.68) contrast(1.05);}
 .blog-cover-img{--pi-f:brightness(.88) saturate(.72);}
 
-.pi-skel{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:inherit;
-  background:rgba(255,255,255,.03);
-  transition:opacity .55s cubic-bezier(.22,.61,.36,1);}
+.pi-skel{position:absolute;inset:0;z-index:1;pointer-events:none;border-radius:inherit;overflow:hidden;
+  background:linear-gradient(135deg,rgba(255,255,255,.036),rgba(255,255,255,.02));
+  transition:opacity .9s cubic-bezier(.4,0,.2,1);}
+/* 呼吸：大面积、带暖色的柔和径向光，按正弦采样，亮度变化被空间渐变分摊，不会出现“一档一档”的阶梯感 */
+.pi-skel::after{content:'';position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(95% 75% at 50% 42%,rgba(196,154,82,.085) 0%,rgba(196,154,82,.04) 42%,rgba(196,154,82,0) 78%);
+  opacity:.24;will-change:opacity;
+  animation:piGlow 3.8s linear infinite;
+  animation-delay:calc(var(--pi-d,0s) * -1);}
+/* 流光：宽而柔的高光带缓缓扫过，扫完留一段静息 */
 .pi-skel::before{content:'';position:absolute;inset:0;border-radius:inherit;
-  background:rgba(255,255,255,.05);
-  opacity:0;animation:piBreath 1.9s cubic-bezier(.45,0,.55,1) .15s infinite;}
+  background:linear-gradient(100deg,
+    rgba(255,255,255,0) 0%,rgba(255,255,255,.008) 18%,rgba(255,255,255,.028) 32%,
+    rgba(255,255,255,.055) 44%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.055) 56%,
+    rgba(255,255,255,.028) 68%,rgba(255,255,255,.008) 82%,rgba(255,255,255,0) 100%);
+  transform:translateX(-120%);will-change:transform;
+  animation:piSweep 2.8s cubic-bezier(.45,.05,.25,1) infinite;
+  animation-delay:calc(var(--pi-d,0s) * -1);}
 .pi-skel.pi-out{opacity:0;}
-@keyframes piBreath{0%,100%{opacity:0}50%{opacity:1}}
+.pi-skel.pi-out::before,.pi-skel.pi-out::after{animation-play-state:paused;}
+@keyframes piGlow{0%{opacity:0.240} 6.25%{opacity:0.269} 12.5%{opacity:0.351} 18.75%{opacity:0.475} 25%{opacity:0.620} 31.25%{opacity:0.765} 37.5%{opacity:0.889} 43.75%{opacity:0.971} 50%{opacity:1.000} 56.25%{opacity:0.971} 62.5%{opacity:0.889} 68.75%{opacity:0.765} 75%{opacity:0.620} 81.25%{opacity:0.475} 87.5%{opacity:0.351} 93.75%{opacity:0.269} 100%{opacity:0.240}}
+@keyframes piSweep{
+  0%{transform:translateX(-120%);}
+  64%,100%{transform:translateX(120%);}
+}
 
 .pi-wrap{position:relative;overflow:hidden;border-radius:12px;width:100%;max-width:260px;}
 .pi-wrap:not(.pi-ready){min-height:150px;}
@@ -1760,7 +1777,8 @@ img.pi[data-pi].pi-in{
 .sb-av img.pi[data-pi].pi-in,.mob-av img.pi[data-pi].pi-in{filter:blur(0)!important;transform:scale(1)!important;}
 
 @media (prefers-reduced-motion:reduce){
-  .pi-skel::before{animation:none}
+  .pi-skel::before{animation:none;transform:translateX(-120%)}
+  .pi-skel::after{animation:none;opacity:.6}
   img.pi[data-pi]{transform:none!important;filter:var(--pi-f,none)!important;transition:opacity .01s!important}
   img.pi[data-pi].pi-in{filter:var(--pi-f,none)!important}
   .pi-skel{transition-duration:.01s!important}
@@ -5675,6 +5693,8 @@ document.addEventListener('keydown', e => {
     img.classList.add('pi');
     var skel=document.createElement('div');
     skel.className='pi-skel';
+    // 每张图的呼吸/流光错开相位，避免整页同频闪动
+    skel.style.setProperty('--pi-d',(Math.random()*3).toFixed(2)+'s');
     slot.insertBefore(skel,slot.firstChild);
 
     var shown=false;
