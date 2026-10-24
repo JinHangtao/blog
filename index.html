@@ -851,6 +851,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   /* 三个属性用同一条曲线同一时长：颜色 / 描边 / 底色一起变，不会有的先亮有的后亮 */
   transition:border-color .32s cubic-bezier(.32,.72,0,1),color .32s cubic-bezier(.32,.72,0,1),background-color .32s cubic-bezier(.32,.72,0,1),opacity .34s cubic-bezier(.4,0,.2,1),transform .34s cubic-bezier(.4,0,.2,1);
   -webkit-tap-highlight-color:transparent;outline:none;
+  /* 常驻合成层：浮现动画结束时不再「退层重绘」，否则线条/箭头会在落定那一刻突然变暗 */
+  will-change:opacity,transform;
   opacity:0;transform:translateY(6px) scale(.88);}
 /* 灯箱落定后（JS 把 .lb-btns 设为 opacity:1）三个按钮依次浮现：← → ✕；同时保留颜色/描边的 hover 过渡 */
 .lb-btns[style*="opacity: 1"] button{opacity:1;transform:none;
