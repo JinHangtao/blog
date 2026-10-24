@@ -1774,6 +1774,7 @@ img.pi[data-pi].pi-in{
   .reveal-ready .sb,.reveal-ready .main,.reveal-ready .sb > *,.reveal-ready #starsBg,.reveal-ready .sb-av,
   .ph-reveal,.ph-word,.ph-n,.ph-sub{filter:none!important;}
   .reveal-ready .sb-av{scale:none!important;}
+  .panel{filter:none!important;}
   .ph-reveal,.ph-word{transition-duration:.2s!important;transform:none!important;}
 }
 /* 进场期间被打断：之后新触发的过渡直接快进收尾 */
@@ -4121,9 +4122,10 @@ function triggerStmtPoem(){
     if(main)main.scrollTo({top:0,behavior:'smooth'});
     window.scrollTo({top:0,behavior:'smooth'});
 
-    // 淡出旧 panel
-    oldPanel.style.transition='opacity .5s cubic-bezier(.4,0,.2,1)';
+    // 淡出旧 panel（同时轻微虚化，与进场的对焦效果呼应）
+    oldPanel.style.transition='opacity .42s var(--ease-out), filter .42s var(--ease-out)';
     oldPanel.style.opacity='0';
+    oldPanel.style.filter='blur(calc(var(--blur-in) * .8))';
 
     _goToken = {};
     var gtoken = _goToken;
@@ -4133,22 +4135,27 @@ function triggerStmtPoem(){
       oldPanel.style.transition='';
       oldPanel.style.opacity='';
       oldPanel.style.transform='';
+      oldPanel.style.filter='';
 
-      // 新 panel：淡入
+      // 新 panel：从虚焦淡入（只动 opacity + filter，不用 transform，避免动画期间拦截触控滚动）
       newPanel.style.opacity='0';
       newPanel.style.transform='';
+      newPanel.style.filter='blur(calc(var(--blur-in) * 1.2))';
       newPanel.style.transition='none';
       newPanel.classList.add('on');
 
       requestAnimationFrame(function(){
         requestAnimationFrame(function(){
-          newPanel.style.transition='opacity .7s cubic-bezier(.25,.8,.25,1)';
+          newPanel.style.transition='opacity .7s var(--ease-out), filter .85s var(--ease-out)';
           newPanel.style.opacity='1';
+          newPanel.style.filter='none';
+          animatePanelTitle(newPanel);
           revealPanelCards(newPanel);
           if(newId==='stmt')setTimeout(triggerStmtPoem,160);
           setTimeout(function(){
             newPanel.style.transition='';
-          },740);
+            if(gtoken === _goToken) newPanel.style.filter='';
+          },900);
         });
       });
     },480);
