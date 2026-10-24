@@ -789,12 +789,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* ══ LIGHTBOX ══ */
 /* 灯箱容器本身不再整体淡入淡出（否则飞行中的图片会半透明）；
    只淡背景，图片由 FLIP 飞行动画接管。visibility 延迟 .5s 隐藏，等飞回动画播完。 */
-.lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .5s;}
+.lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .36s;}
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
-.lb.on .lb-img img{visibility:visible}
+.lb.on .lb-img img{visibility:visible;will-change:transform,clip-path;}
 .lb.lb-flying .lb-img img{box-shadow:none !important;will-change:transform,clip-path;backface-visibility:hidden;}
 .lb.lb-flying .lb-img{will-change:clip-path;}
-.lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);opacity:0;transition:opacity .42s cubic-bezier(.4,0,.2,1);}
+.lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);opacity:0;transition:opacity .3s cubic-bezier(.4,0,.2,1);}
 .lb.on .lb-bg{opacity:1}
 .lb-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:0;justify-content:center;margin-top:4vh;}
 /* 容器：border-radius + overflow:hidden 在這裡，永遠是圓角 */
@@ -3394,6 +3394,8 @@ function _lbDrive(img, t, b, dir, dur){
   var bx = box.getBoundingClientRect();
   _lbBoxCache = bx;
   var VW = window.innerWidth, VH = window.innerHeight;
+  var a0 = _lbThumbRect(t, b);
+  var needBoxClip = !(a0.left >= w.left - .5 && a0.right <= w.right + .5 && a0.top >= w.top - .5 && a0.bottom <= w.bottom + .5);
 
   // 终点（灯箱位）姿态：灯箱里放大/平移过时取当时的 transform
   var F = { tx: 0, ty: 0, s: 1, r: parseFloat(getComputedStyle(img).borderRadius) || 10 };
@@ -3477,7 +3479,7 @@ function _lbDrive(img, t, b, dir, dur){
     img.style.transform = 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
     img.style.clipPath  = clip;
     img.style.filter    = (u < .999 && meta.filter !== 'none') ? meta.filter : '';
-    box.style.clipPath  = boxClip;
+    if(needBoxClip) box.style.clipPath = boxClip;
 
     if(p >= 1){
       h.playState = 'finished';
@@ -3512,7 +3514,7 @@ function _lbFlyIn(idx, tok){
   img.style.opacity = '';
   _lbCancelAnim();
   _lbFlyState(true);
-  var anim = _lbDrive(img, t, b, 'in', 520);    // 逐帧驱动：img + 遮挡窗同帧更新，实时跟随缩略图
+  var anim = _lbDrive(img, t, b, 'in', 380);    // 逐帧驱动：img + 遮挡窗同帧更新，实时跟随缩略图
   _lbAnimBox = anim; _lbAnim = anim;
   anim.onfinish = function(){
     _lbStopTrack();
@@ -3525,7 +3527,7 @@ function _lbFlyIn(idx, tok){
       img.style.opacity = '';
     }
   };
-  _lbShowSide(tok, 300);
+  _lbShowSide(tok, 200);
 }
 // 关闭：灯箱位置 → 缩略图原位。返回动画时长（0 = 没有飞，只淡出）
 function _lbFlyOut(){
@@ -3547,7 +3549,7 @@ function _lbFlyOut(){
       var p = _lbPose(t, b, a);
       _lbFromTf = curTf || '';
       _lbFlyState(true);
-      var anim = _lbDrive(img, t, b, 'out', 460);   // 逐帧驱动：终点每帧重新瞄准此刻的缩略图
+      var anim = _lbDrive(img, t, b, 'out', 300);   // 逐帧驱动：终点每帧重新瞄准此刻的缩略图
       _lbAnimBox = anim; _lbAnim = anim;
       anim.onfinish = function(){
         _lbStopTrack();
@@ -3562,7 +3564,7 @@ function _lbFlyOut(){
         if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
         _lbFromTf = '';
       };
-      return 520;
+      return 340;   // 飞行 300ms + 余量，灯箱收尾不再多等
     }
     if(curTf) img.style.transform = curTf;
   }
