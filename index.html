@@ -3312,6 +3312,75 @@ function _lbTrack(anim, t, b, dir){
     _lbTrackRaf = requestAnimationFrame(tick);
   })();
 }
+
+/* ══ 飞行时与吸顶 Tab 栏 / 区块边缘的相处方式（不裁切、不避让，而是"让路"）══
+   B. 飞回前把缩略图平滑带进安全区（Tab 栏下方 + 区块底边之内），图片自然飞向滚动后的位置——实时跟随会每帧重定向终点
+   A. 仍与 Tab 栏重叠（滚不动：已在顶/底）时，Tab 栏短暂淡出，图片落地的最后一段再淡回来，不会出现"盖在上面再缩回去"的硬切 */
+var _lbScrollRaf = 0, _lbTbTmr = 0, _lbTbClr = 0, _lbFlew = false;
+var _LB_SAFE_M = 14;       // 缩略图离 Tab 栏 / 区块底边的最小留白（px）
+function _lbScroller(t){
+  for(var n = t && t.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement){
+    var cs = getComputedStyle(n);
+    if(/auto|scroll|overlay/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return n;
+  }
+  return window;
+}
+function _lbScrollTo(sc, y){
+  try{ sc.scrollTo({ top: y, behavior: 'instant' }); }
+  catch(e){ if(sc === window) window.scrollTo(0, y); else sc.scrollTop = y; }
+}
+// 把缩略图带进安全区；返回实际滚动量（>0 向下），无需滚动返回 0
+function _lbSafeScroll(t, dur){
+  if(_lbScrollRaf){ cancelAnimationFrame(_lbScrollRaf); _lbScrollRaf = 0; }
+  if(!t || _lbReduced()) return 0;
+  var a = t.getBoundingClientRect(), sc = _lbScroller(t), win = (sc === window);
+  var tb = document.querySelector('.topbar');
+  var top = tb ? tb.getBoundingClientRect().bottom : 0, bot = window.innerHeight;
+  if(!win){ var r = sc.getBoundingClientRect(); top = Math.max(top, r.top); bot = Math.min(bot, r.bottom); }
+  var M = _LB_SAFE_M;
+  if(a.height + 2 * M > bot - top) return 0;          // 放不下就不动
+  var d = 0;
+  if(a.top < top + M) d = a.top - (top + M);
+  else if(a.bottom > bot - M) d = a.bottom - (bot - M);
+  if(!d) return 0;
+  var cur = win ? window.pageYOffset : sc.scrollTop;
+  var max = win ? document.documentElement.scrollHeight - window.innerHeight : sc.scrollHeight - sc.clientHeight;
+  var to = Math.max(0, Math.min(max, cur + d)), real = to - cur;
+  if(Math.abs(real) < 1) return 0;
+  var t0 = performance.now();
+  (function step(now){
+    var k = Math.min(1, ((now || performance.now()) - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    _lbScrollTo(sc, cur + real * e);
+    _lbScrollRaf = k < 1 ? requestAnimationFrame(step) : 0;
+  })(t0);
+  return real;
+}
+// Tab 栏是否会和缩略图（滚动 shift 之后的位置）重叠
+function _lbTbOverlap(t, shift){
+  var tb = document.querySelector('.topbar');
+  if(!tb || !t) return false;
+  var q = tb.getBoundingClientRect(), a = t.getBoundingClientRect(), top = a.top - (shift || 0), bot = a.bottom - (shift || 0);
+  return top < q.bottom + 6 && bot > q.top && a.right > q.left && a.left < q.right;
+}
+function _lbTbSet(hide, showDelay){
+  var tb = document.querySelector('.topbar');
+  if(!tb) return;
+  clearTimeout(_lbTbTmr); clearTimeout(_lbTbClr);
+  if(hide){
+    tb.style.transition = 'opacity .18s ease'; tb.style.opacity = '0';
+    if(showDelay != null) _lbTbTmr = setTimeout(_lbTbRestore, showDelay);
+  } else {
+    _lbTbRestore();
+  }
+}
+function _lbTbRestore(){
+  var tb = document.querySelector('.topbar');
+  if(!tb) return;
+  clearTimeout(_lbTbTmr); clearTimeout(_lbTbClr);
+  if(tb.style.opacity === '') return;
+  tb.style.transition = 'opacity .3s ease'; tb.style.opacity = '';
+  _lbTbClr = setTimeout(function(){ tb.style.transition = ''; }, 360);
+}
 // 打开：缩略图原位 → 灯箱位置
 function _lbFlyIn(idx, tok){
   var img = document.getElementById('lbImg');
@@ -3327,6 +3396,7 @@ function _lbFlyIn(idx, tok){
     return;
   }
   var p = _lbPose(t, b);                 // 先量，再隐藏缩略图
+  _lbTbSet(_lbTbOverlap(t, 0));          // 缩略图被 Tab 栏压住一部分：Tab 栏让路（随暗幕一起淡出，关灯箱时再回来）
   _lbHideThumb(t);
   img.style.opacity = '';
   _lbCancelAnim();
@@ -3350,12 +3420,14 @@ function _lbFlyOut(){
   var img = document.getElementById('lbImg');
   var t   = _lbThumbOf(curLbIdx);
   _lbCancelAnim();
+  _lbFlew = false;
   var canFly = img.getAttribute('src') && img.style.opacity !== '0' && img.naturalWidth &&
                (window._lbScale || 1) <= 1.02 && t && !_lbReduced() && _lbThumbVisible(t);
   if(canFly){
     var b = img.getBoundingClientRect();
     if(b.width > 4 && b.height > 4){
       var p = _lbPose(t, b);
+      _lbFlew = true;
       var anim = img.animate(_lbImgFrames(img, p, 'out'), { duration: 460, easing: _LB_EASE, fill: 'forwards' });
       _lbAnim = anim;
       _lbTrack(anim, t, b, 'out');
@@ -3585,6 +3657,7 @@ function openLb(idx){
   _lbStop();
   _lbCancelAnim();
   _lbRestoreThumb();
+  if(_lbScrollRaf){ cancelAnimationFrame(_lbScrollRaf); _lbScrollRaf = 0; }
   img.classList.remove('lb-fadein');
   img.onload = null;
   img.src = '';
@@ -3621,6 +3694,12 @@ function closeLb(){
   lb.style.alignItems='';
   lb.style.overflowY='';
   document.body.style.overflow='';
+  if(_lbFlew){
+    var _t2 = _lbThumbOf(curLbIdx);
+    var _sh = _lbSafeScroll(_t2, 380);                  // 先让缩略图进安全区（飞行层会实时跟随）
+    _lbTbSet(_lbTbOverlap(_t2, _sh), 300);               // 仍重叠才让 Tab 栏让路，落地前 ~160ms 淡回
+    if(!_lbTbOverlap(_t2, _sh)) _lbTbRestore();
+  } else { _lbTbRestore(); }
   if(_lbCloseTmr){ clearTimeout(_lbCloseTmr); _lbCloseTmr = null; }
   // 等灯箱淡出完成后再重置样式
   _lbCloseTmr = setTimeout(function(){
@@ -3632,6 +3711,7 @@ function closeLb(){
     var colEl  = document.querySelector('.lb-col');
     _lbCancelAnim();
     _lbRestoreThumb();
+    _lbTbRestore();
     if(window._lbResetZoom) window._lbResetZoom(true);
     img.classList.remove('lb-fadein');
     img.src=''; img.style.opacity='0';
