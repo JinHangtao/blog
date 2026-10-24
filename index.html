@@ -723,6 +723,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* 容器：border-radius + overflow:hidden 在這裡，永遠是圓角 */
 .lb-img{flex-shrink:0;position:relative;line-height:0;}
 /* 圖片本身不加 border-radius，由容器統一裁切，避免任何直角漏出 */
+.lb-img{touch-action:none;}
+.lb.lb-zoomed{overflow:hidden !important;}
+.lb.lb-zoomed .lb-img img{box-shadow:none;}
 .lb-img img{display:block;max-width:82vw;max-height:90vh;object-fit:contain;box-shadow:0 40px 120px rgba(0,0,0,.95);border-radius:var(--ri);}
 /* 淡入 keyframe，用 animation 而非 transition，不受 src 切換干擾 */
 @keyframes lbFadeIn{from{opacity:0;}to{opacity:1;}}
@@ -3061,6 +3064,7 @@ function _lbStop(){
 
 function _lbShow(idx){
   _lbStop();
+  if(window._lbResetZoom) window._lbResetZoom(true);
   var d    = META[idx]||{title:'',en:'',desc:''};
   var el   = document.querySelector('[onclick="openLb('+idx+')"]');
   var src  = el&&el.querySelector('img') ? el.querySelector('img').src : '';
@@ -3194,6 +3198,7 @@ function closeLb(){
     var img    = document.getElementById('lbImg');
     var imgBox = document.getElementById('lbImgBox');
     var colEl  = document.querySelector('.lb-col');
+    if(window._lbResetZoom) window._lbResetZoom(true);
     img.classList.remove('lb-fadein');
     img.src=''; img.style.opacity='0';
     img.style.width=''; img.style.maxWidth=''; img.style.maxHeight=''; img.style.objectFit=''; img.style.borderRadius='';
@@ -3244,7 +3249,7 @@ document.addEventListener('keydown', function(e){
   var dyAcc=0;
 
   window._lbTouchMove=function lbTouchMove(e){
-    if(!tracking||e.touches.length>1) return;
+    if(!tracking||e.touches.length>1||(window._lbScale||1)>1.02) return;
     var dx=Math.abs(e.touches[0].clientX-sx);
     var dy=e.touches[0].clientY-sy;
     var ady=Math.abs(dy);
@@ -3260,7 +3265,12 @@ document.addEventListener('keydown', function(e){
   }
 
   lb.addEventListener('touchstart', function(e){
-    if(e.touches.length>1) return;
+    // 第二根手指落下 / 已放大：放弃切图与下拉手势，并把可能已拖动的 wrap 弹回
+    if(e.touches.length>1 || (window._lbScale||1)>1.02){
+      tracking=false; swDir=null;
+      if(dyAcc){ wrap.style.transition='transform 0.3s cubic-bezier(0.22,0.61,0.36,1)'; wrap.style.transform='translateY(0)'; dyAcc=0; }
+      return;
+    }
     sx=e.touches[0].clientX; sy=e.touches[0].clientY;
     tracking=true; swDir=null; dyAcc=0;
     wrap.style.transition='none';
@@ -3293,61 +3303,224 @@ document.addEventListener('keydown', function(e){
     wrap.style.transform='translateY(0)';
   },{passive:true});
 
- // Pinch to zoom + pan
+ // ── Pinch / pan / double-tap zoom ──
+ // 重写版。算法参考 PhotoSwipe v5（锚点缩放公式、pan bounds、PAN_END_FRICTION=.35、双击 300ms）
+ // 与 Panzoom（focal-point zoom）。变换统一为 translate3d(tx,ty) scale(s)，origin 固定图片中心。
 (function(){
-  var lbImg = document.getElementById('lbImg');
-  var initDist = 0, initScale = 1;
-  if(!window._lbScale) window._lbScale = 1;
-  var lbScale = 1;
-  var panX = 0, panY = 0, initPanX = 0, initPanY = 0, panStartX = 0, panStartY = 0;
+  var lbImg    = document.getElementById('lbImg');
+  var lbImgBox = document.getElementById('lbImgBox');
+  var MIN = 1, RUB = 0.35, DT_DELAY = 300, DT_DIST = 30, ZOOM2 = 2.5;
 
-  function getDist(t){
-    var dx = t[0].clientX - t[1].clientX;
-    var dy = t[0].clientY - t[1].clientY;
-    return Math.sqrt(dx*dx + dy*dy);
+  var s = 1, tx = 0, ty = 0, maxS = 3;
+  var G = null;                 // 手势开始时的几何快照
+  var mode = null;              // 'pinch' | 'pan' | null
+  var base = null;              // 手势基准
+  var lastMid = {x:0, y:0};
+  var anim = 0, samples = [];
+  var tap = null, lastTap = {t:0, x:0, y:0};
+  var multi = false;            // 本次触摸序列是否出现过双指
+
+  window._lbScale = 1;
+
+  function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
+
+  // 图片中心(未变换) = 当前 rect 中心 - 当前位移；缩放以中心为原点，所以中心不受 scale 影响
+  function geom(){
+    var r = lbImg.getBoundingClientRect();
+    var W = lbImg.offsetWidth, H = lbImg.offsetHeight;
+    var dpr = window.devicePixelRatio || 1;
+    maxS = Math.min(6, Math.max(3, (lbImg.naturalWidth || W) / (W * dpr)));
+    return { W:W, H:H, cx:r.left + r.width/2 - tx, cy:r.top + r.height/2 - ty,
+             vw:lb.clientWidth || window.innerWidth, vh:lb.clientHeight || window.innerHeight };
   }
 
-  function applyTransform(transition){
-    lbImg.style.transition = transition ? 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)' : 'none';
-    lbImg.style.transform = 'scale(' + lbScale + ') translate(' + panX + 'px,' + panY + 'px)';
+  // 位移边界：图比屏幕大 → 贴边；图比屏幕小 → 锁在 0（居中）
+  function lim(sc){
+    var w = G.W*sc, h = G.H*sc;
+    return {
+      x0: w > G.vw ? G.vw - G.cx - w/2 : 0,  x1: w > G.vw ? w/2 - G.cx : 0,
+      y0: h > G.vh ? G.vh - G.cy - h/2 : 0,  y1: h > G.vh ? h/2 - G.cy : 0
+    };
+  }
+  function fit(v, a, b, soft){
+    if(v < a) return soft ? a + (v-a)*RUB : a;
+    if(v > b) return soft ? b + (v-b)*RUB : b;
+    return v;
+  }
+  // 让屏幕点 (mx,my) 下的内容在缩放到 S 后仍在原处
+  function pointFor(S, mx, my, fromS, fromX, fromY){
+    var k = S / fromS;
+    return { x:(mx-G.cx) - k*(mx-G.cx-fromX), y:(my-G.cy) - k*(my-G.cy-fromY) };
+  }
+
+  function apply(){
+    lbImg.style.transformOrigin = '50% 50%';
+    lbImg.style.transform = (s === 1 && tx === 0 && ty === 0) ? '' :
+      'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + s + ')';
+    window._lbScale = s;
+    lb.classList.toggle('lb-zoomed', s > 1.02);
+  }
+  function end(){ lbImg.style.willChange = ''; }
+  function stop(){ if(anim){ cancelAnimationFrame(anim); anim = 0; } }
+
+  function tweenTo(S, X, Y, dur){
+    stop();
+    var s0 = s, x0 = tx, y0 = ty, t0 = performance.now(); dur = dur || 260;
+    lbImg.style.willChange = 'transform';
+    (function f(now){
+      var k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      s = s0 + (S-s0)*e; tx = x0 + (X-x0)*e; ty = y0 + (Y-y0)*e;
+      if(k >= 1){ s = S; tx = X; ty = Y; apply(); anim = 0; end(); return; }
+      apply(); anim = requestAnimationFrame(f);
+    })(t0);
+  }
+
+  // 松手：缩放回到 [MIN,maxS]，位移回到边界内
+  function settle(mx, my){
+    if(!G) G = geom();
+    var S = Math.min(maxS, Math.max(MIN, s));
+    if(S < 1.02){ tweenTo(1, 0, 0, 240); return; }
+    var p = pointFor(S, mx, my, s, tx, ty), L = lim(S);
+    var X = fit(p.x, L.x0, L.x1, false), Y = fit(p.y, L.y0, L.y1, false);
+    if(Math.abs(X-tx) < .5 && Math.abs(Y-ty) < .5 && Math.abs(S-s) < .001){ end(); return; }
+    tweenTo(S, X, Y, 240);
+  }
+
+  function fling(){
+    var n = samples.length, now = performance.now();
+    var L = lim(s);
+    var out = tx < L.x0 || tx > L.x1 || ty < L.y0 || ty > L.y1;
+    if(out || n < 2 || now - samples[n-1].t > 80){ settle(lastMid.x, lastMid.y); return; }
+    var a = samples[0], b = samples[n-1], dt = (b.t - a.t) || 1;
+    var vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt;
+    if(Math.abs(vx) < .05 && Math.abs(vy) < .05){ end(); return; }
+    var last = now;
+    (function f(t){
+      var d = Math.min(32, t - last); last = t;
+      var fr = Math.exp(-d / 240); vx *= fr; vy *= fr;
+      var nx = tx + vx*d, ny = ty + vy*d;
+      if(nx < L.x0 || nx > L.x1){ nx = fit(nx, L.x0, L.x1, false); vx = 0; }
+      if(ny < L.y0 || ny > L.y1){ ny = fit(ny, L.y0, L.y1, false); vy = 0; }
+      tx = nx; ty = ny; apply();
+      if(Math.abs(vx) > .02 || Math.abs(vy) > .02) anim = requestAnimationFrame(f);
+      else { anim = 0; end(); }
+    })(last);
+  }
+
+  // 当前位移若处于橡皮筋越界状态，先还原成"未压缩"的值，否则重新建基准时会被二次压缩而抖动
+  function unfit(v, a, b){
+    if(v < a) return a + (v-a)/RUB;
+    if(v > b) return b + (v-b)/RUB;
+    return v;
+  }
+  function beginPan(t){
+    mode = 'pan';
+    var L = lim(s);
+    base = { x:t.clientX, y:t.clientY, tx:unfit(tx, L.x0, L.x1), ty:unfit(ty, L.y0, L.y1) };
+    samples = [{ t:performance.now(), x:tx, y:ty }];
+  }
+  function beginPinch(ts){
+    mode = 'pinch';
+    var mx = (ts[0].clientX + ts[1].clientX)/2, my = (ts[0].clientY + ts[1].clientY)/2;
+    base = { d:Math.max(1, dist(ts)), mx:mx, my:my, s:s, tx:tx, ty:ty };
+    lastMid = { x:mx, y:my };
+  }
+
+  function doubleTap(x, y){
+    G = geom();
+    if(s > 1.05){ tweenTo(1, 0, 0, 280); return; }
+    var S = Math.min(maxS, ZOOM2), p = pointFor(S, x, y, s, tx, ty), L = lim(S);
+    tweenTo(S, fit(p.x, L.x0, L.x1, false), fit(p.y, L.y0, L.y1, false), 280);
   }
 
   lb.addEventListener('touchstart', function(e){
-    if(e.touches.length === 2){
-      initDist = getDist(e.touches);
-      initScale = lbScale;
-    } else if(e.touches.length === 1 && lbScale > 1.05){
-      panStartX = e.touches[0].clientX;
-      panStartY = e.touches[0].clientY;
-      initPanX = panX;
-      initPanY = panY;
+    if(!lb.classList.contains('on')) return;
+    var n = e.touches.length;
+    stop();
+    if(n === 1){
+      multi = false; G = geom(); samples = [];
+      var t = e.touches[0];
+      tap = { t:Date.now(), x:t.clientX, y:t.clientY, moved:false, onImg:lbImgBox.contains(e.target) };
+      if(s > 1.02){ lbImg.style.willChange = 'transform'; beginPan(t); } else mode = null;
+    } else {
+      multi = true; tap = null; G = geom();
+      lbImg.style.willChange = 'transform';
+      beginPinch(e.touches);
     }
   }, {passive:true});
 
   lb.addEventListener('touchmove', function(e){
-    if(e.touches.length === 2){
+    if(!lb.classList.contains('on')) return;
+    var n = e.touches.length;
+    if(tap){
+      if(n > 1) tap = null;
+      else if(Math.abs(e.touches[0].clientX - tap.x) > 10 || Math.abs(e.touches[0].clientY - tap.y) > 10) tap.moved = true;
+    }
+    if(n >= 2 && mode === 'pinch'){
       e.preventDefault();
-      var newDist = getDist(e.touches);
-      lbScale = window._lbScale = Math.min(Math.max(initScale * (newDist / initDist), 1), 4);
-      var originX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      var originY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      lbImg.style.transformOrigin = originX + 'px ' + originY + 'px';
-      applyTransform(false);
-    } else if(e.touches.length === 1 && lbScale > 1.05){
+      var d = dist(e.touches);
+      var mx = (e.touches[0].clientX + e.touches[1].clientX)/2, my = (e.touches[0].clientY + e.touches[1].clientY)/2;
+      var raw = base.s * d / base.d;
+      var ns = raw < MIN ? MIN - (MIN-raw)*.5 : (raw > maxS ? maxS + (raw-maxS)*.25 : raw);
+      var qx = (base.mx - G.cx - base.tx) / base.s, qy = (base.my - G.cy - base.ty) / base.s;
+      var L = lim(ns);
+      s  = ns;
+      tx = fit((mx - G.cx) - ns*qx, L.x0, L.x1, true);
+      ty = fit((my - G.cy) - ns*qy, L.y0, L.y1, true);
+      lastMid = { x:mx, y:my };
+      apply();
+    } else if(n === 1 && mode === 'pan'){
       e.preventDefault();
-      panX = initPanX + (e.touches[0].clientX - panStartX) / lbScale;
-      panY = initPanY + (e.touches[0].clientY - panStartY) / lbScale;
-      applyTransform(false);
+      var t = e.touches[0], L2 = lim(s);
+      tx = fit(base.tx + (t.clientX - base.x), L2.x0, L2.x1, true);
+      ty = fit(base.ty + (t.clientY - base.y), L2.y0, L2.y1, true);
+      var now = performance.now();
+      samples.push({ t:now, x:tx, y:ty });
+      while(samples.length > 2 && now - samples[0].t > 100) samples.shift();
+      apply();
     }
   }, {passive:false});
 
   lb.addEventListener('touchend', function(e){
-    if(e.touches.length < 2 && lbScale < 1.15){
-      lbScale = window._lbScale = 1;
-      panX = 0; panY = 0;
-      applyTransform(true);
+    if(!lb.classList.contains('on')) return;
+    var n = e.touches.length;
+
+    if(n === 0 && tap && !multi && tap.onImg && !tap.moved && Date.now() - tap.t < 300){
+      var ct = e.changedTouches[0], now = Date.now();
+      if(now - lastTap.t < DT_DELAY && Math.abs(ct.clientX - lastTap.x) < DT_DIST && Math.abs(ct.clientY - lastTap.y) < DT_DIST){
+        lastTap.t = 0; tap = null; mode = null; doubleTap(ct.clientX, ct.clientY); return;
+      }
+      lastTap = { t:now, x:ct.clientX, y:ct.clientY };
+    }
+    if(n === 0) tap = null;
+
+    if(mode === 'pinch' && n < 2){
+      if(n === 1 && s > 1.02 && s <= maxS){ beginPan(e.touches[0]); }       // 双指→单指：重置平移基准，避免跳变
+      else { mode = null; settle(lastMid.x, lastMid.y); }
+    } else if(mode === 'pan' && n === 0){
+      mode = null;
+      if(s > 1.02) fling(); else settle(lastMid.x, lastMid.y);
     }
   }, {passive:true});
+
+  lb.addEventListener('touchcancel', function(){
+    tap = null;
+    if(mode){ mode = null; if(G) settle(lastMid.x, lastMid.y); }
+  }, {passive:true});
+
+  // 阻止 iOS Safari 的整页捏合缩放（灯箱打开时）
+  ['gesturestart','gesturechange','gestureend'].forEach(function(nm){
+    lb.addEventListener(nm, function(e){ if(lb.classList.contains('on')) e.preventDefault(); }, {passive:false});
+  });
+
+  // 切图/关闭/重开时必须复位；旋转屏幕后边界失效，也复位
+  window._lbResetZoom = function(instant){
+    stop(); mode = null; tap = null; samples = []; lastTap.t = 0;
+    if(instant || (s === 1 && tx === 0 && ty === 0)){ s = 1; tx = 0; ty = 0; apply(); end(); }
+    else { G = geom(); tweenTo(1, 0, 0, 200); }
+  };
+  window.addEventListener('resize', function(){ if(s !== 1 || tx || ty) window._lbResetZoom(false); });
+  window.addEventListener('orientationchange', function(){ window._lbResetZoom(true); });
 })();
 })();
 function togglePlay(aid,bid){
