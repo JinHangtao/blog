@@ -10,7 +10,7 @@
 <script>
 /* ═══ PERF PROBE：访问 ?perf=1 启用（或 localStorage.perf='1'），不加参数时完全不运行 ═══ */
 (function(){
-  var on=/[?&]perf=1/.test(location.search); try{ on=on||localStorage.getItem('perf')==='1'; }catch(e){}
+  var on=/[?&]perf=1/.test(location.search); try{ if(on)localStorage.setItem('perf','1'); on=on||localStorage.getItem('perf')==='1'; }catch(e){}
   if(!on) return;
   var P=window.__perf={frames:0,jank:[],long:[],canvasMs:0,maxCanvas:0};
   var T0=performance.now(), last=T0, worst=0, hist={ok:0,m24:0,m34:0,m50:0,m100:0};
@@ -299,6 +299,12 @@ button,input{cursor:none !important;}
 #cur{width:6px;height:6px;background:var(--gold);border-radius:50%;position:fixed;z-index:9999;top:0;left:0;transform:translate(-50%,-50%);pointer-events:none;transition:transform .18s cubic-bezier(.34,1.56,.64,1),opacity .1s,width .18s cubic-bezier(.34,1.56,.64,1),height .18s cubic-bezier(.34,1.56,.64,1),background .18s}
 #cur-r{width:22px;height:22px;border:1px solid rgba(196,154,82,.3);border-radius:50%;position:fixed;z-index:9998;top:0;left:0;transform:translate(-50%,-50%);pointer-events:none;transition:transform .22s cubic-bezier(.34,1.4,.64,1),border-color .2s,opacity .1s,width .22s cubic-bezier(.34,1.4,.64,1),height .22s cubic-bezier(.34,1.4,.64,1)}
 /* ── grain ── */
+/* YouTube 点击才加载：避免入场期间加载整个播放器（数 MB JS + 额外进程） */
+.yt-facade{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;cursor:pointer;background-color:#000;background-position:center;background-size:cover;display:block}
+.yt-facade::after{content:'';position:absolute;inset:0;background:rgba(0,0,0,.28);transition:background .3s}
+.yt-facade:hover::after{background:rgba(0,0,0,.12)}
+.yt-play{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;border:1px solid var(--gold);background:rgba(18,17,16,.55);z-index:1}
+.yt-play::before{content:'';position:absolute;left:25px;top:20px;border-left:18px solid var(--gold);border-top:12px solid transparent;border-bottom:12px solid transparent}
 body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;opacity:.4;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='.022'/%3E%3C/svg%3E")}
 
 /* ── stars background ── */
@@ -2584,12 +2590,10 @@ function rippleThen(e,el,id){
     </div>
     <h3 class="blog-title">Dreaming Inside an Elastic Space - 彈性空間</h3>
     <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:var(--ri);margin-bottom:20px">
-      <iframe
-        src="https://www.youtube.com/embed/B0SebgWAp-k"
-        style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;touch-action:none"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen>
-      </iframe>
+      <button type="button" class="yt-facade" data-yt="B0SebgWAp-k" aria-label="播放影片"
+        style="background-image:url(https://i.ytimg.com/vi/B0SebgWAp-k/hqdefault.jpg)">
+        <span class="yt-play"></span>
+      </button>
     </div>
     <p class="blog-body blog-body-collapsible">《Dreaming Inside an Elastic Space》是一個互動式影片作品，透過「彈性空間」的概念，探索憂鬱與自殺意念——也就是人的內在心理狀態如何實際改變周圍的世界。
 作品沒有戲劇化或誇張的表現，而是讓觀者親身進入這些情緒狀態。你的每個選擇都會影響空間：物體變得更重或更輕，房間收縮、擴張、扭曲，聲音也模糊了思想與環境的界線。
@@ -6628,6 +6632,17 @@ document.addEventListener('keydown', e => {
     ms.forEach(function(m){ m.addedNodes.forEach(scan); });
   }).observe(document.body,{childList:true,subtree:true});
 })();
+</script>
+<script>
+document.addEventListener('click',function(e){
+  var f=e.target.closest&&e.target.closest('.yt-facade'); if(!f) return;
+  var ifr=document.createElement('iframe');
+  ifr.src='https://www.youtube.com/embed/'+f.dataset.yt+'?autoplay=1&rel=0';
+  ifr.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+  ifr.allowFullscreen=true;
+  ifr.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;border:0;touch-action:none';
+  f.replaceWith(ifr);
+});
 </script>
 </body>
 </html>
