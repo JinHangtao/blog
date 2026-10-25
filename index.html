@@ -909,12 +909,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
    只淡背景，图片由 FLIP 飞行动画接管。visibility 延迟 .5s 隐藏，等飞回动画播完。 */
 .lb{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;visibility:hidden;pointer-events:none;transition:visibility 0s linear .78s;}
 .lb.on{visibility:visible;pointer-events:all;transition-delay:0s}
-.lb.on .lb-img img{visibility:visible;will-change:transform;}
-/* 飞行层结构（全部只走合成器：transform / opacity / filter，主线程不再逐帧重绘大图）：
-   #lbImgBox = 外层「取景窗」：非等比 scale + overflow:hidden + 圆角；
-   #lbImg    = 内层大图：反向 scale，抵消外层的拉伸 → 图片始终等比，只有窗口形状在变（cover 裁切 → 完整图） */
-.lb.lb-flying .lb-img{overflow:hidden;isolation:isolate;transform-origin:0 0;will-change:transform;}
-.lb.lb-flying .lb-img img{transform-origin:0 0;box-shadow:none !important;will-change:transform,filter;backface-visibility:hidden;}
+.lb.on .lb-img img{visibility:visible;will-change:transform,clip-path;}
+.lb.lb-flying .lb-img img{box-shadow:none !important;will-change:transform,clip-path;backface-visibility:hidden;}
+.lb.lb-flying .lb-img{will-change:clip-path;}
 .lb-bg{position:absolute;inset:0;background:rgba(4,3,3,.97);opacity:0;transition:opacity .3s cubic-bezier(.4,0,.2,1);}
 .lb.on .lb-bg{opacity:1}
 .lb-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:0;justify-content:center;margin-top:4vh;}
@@ -925,8 +922,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb.lb-zoomed{overflow:hidden !important;}
 .lb.lb-zoomed .lb-img img{box-shadow:none;}
 .lb-img img{display:block;max-width:82vw;max-height:90vh;object-fit:contain;box-shadow:0 40px 120px rgba(0,0,0,.95);border-radius:var(--ri);}
-/* 触屏：背景本来就是 .97 的近黑，120px 模糊大阴影几乎看不见，却会在飞入落地、缩放重栅格时拖一次重绘 */
-@media (hover:none){.lb-img img{box-shadow:none;}}
 /* 淡入 keyframe，用 animation 而非 transition，不受 src 切換干擾 */
 @keyframes lbFadeIn{from{opacity:0;filter:blur(10px);}to{opacity:1;filter:none;}}
 .lb-img img.lb-fadein{animation:lbFadeIn .9s cubic-bezier(.32,.72,0,1) both;}
@@ -3568,16 +3563,13 @@ function _lbStopTrack(){
   _lbWinCache = null; _lbBoxCache = null;
 }
 window.addEventListener('resize', function(){ _lbWinCache = null; _lbBoxCache = null; }, {passive:true});
-/* ══ 合成器驱动的 FLIP（取代 rAF 逐帧写 clip-path）══
-   旧方案掉帧的根因：每帧 JS 写 img.style.clipPath(带圆角) + box.style.clipPath。
-   clip-path 不是合成器属性，每一帧都要主线程重算 + 重新栅格化整张大图（手机 DPR×3，一帧上千万像素），
-   再叠加 rAF 里的 getBoundingClientRect / 字符串拼接，手机上必然掉帧。
-   新方案：把「cover 裁切 → 完整图」拆成两层纯 transform 动画（业界 container-transform 做法）：
-     · 外层 #lbImgBox：translate + 非等比 scale(cx,cy)，overflow:hidden，是个「取景窗」
-     · 内层 #lbImg   ：scale(ax,ay) translate(-l,-t)，与外层互为反向 → 图片等比，只有窗口形状在变
-   反向缩放不是线性的，所以用 N 个采样关键帧 + linear 时间函数，把 cubic-bezier 缓动「烘焙」进关键帧。
-   全程 WAAPI 的 transform（+ filter），跑在合成器线程，主线程卡住也不影响。
-   返回「类动画」句柄（playState / onfinish / cancel），与原有收尾逻辑完全兼容。 */
+/* ══ 逐帧驱动器（取代 WAAPI + setKeyframes 追踪）══
+   旧方案卡顿的根因：飞行中每帧 setKeyframes 都会让浏览器丢弃并重建动画，
+   #lbImg（transform+clip-path）和 #lbImgBox（clip-path）是两个独立动画、各自重建，
+   常常落在不同帧上 → 图片和遮挡窗互相错位、抖动；合成器上的 transform 动画也被反复重启。
+   现在：只有一个 rAF 循环，每帧「先读（缩略图位置）→ 后写（img 与 box 的样式）」，
+   两层永远同帧更新，不再重建任何动画对象；进度由 JS 用同一条 cubic-bezier 缓动算出，视觉节奏不变。
+   返回一个「类动画」句柄（playState / onfinish / cancel），与原有收尾逻辑完全兼容。 */
 var _lbEaseFn = (function(){            // cubic-bezier(.32,.72,0,1)
   var x1 = .32, y1 = .72, x2 = 0, y2 = 1;
   function bez(t, a, b){ var u = 1 - t; return 3*u*u*t*a + 3*u*t*t*b + t*t*t; }
@@ -3607,72 +3599,32 @@ function _lbParseFilter(str){
 }
 function _lbDrive(img, t, b, dir, dur){
   var box  = document.getElementById('lbImgBox');
-  var col  = document.querySelector('.lb-col');
   var meta = _lbMeta(t);                              // 静态样式只读一次
-  // 飞行期间不变的矩形：只量一次（页面已锁滚动）
+  // 飞行期间不变的矩形：只量一次
   var m0 = document.querySelector('.main').getBoundingClientRect(), tb0 = document.querySelector('.topbar').getBoundingClientRect();
-  var w = _lbWinCache = {
+  _lbWinCache = {
     left: Math.max(m0.left, 0), right: Math.min(m0.right, window.innerWidth),
     top: Math.max(m0.top, tb0.bottom, 0), bottom: Math.min(m0.bottom, window.innerHeight)
   };
+  var w  = _lbWinCache;
+  var bx = box.getBoundingClientRect();
+  _lbBoxCache = bx;
   var VW = window.innerWidth, VH = window.innerHeight;
-  var a  = _lbThumbRect(t, b);
-  var needWin = !(a.left >= w.left - .5 && a.right <= w.right + .5 && a.top >= w.top - .5 && a.bottom <= w.bottom + .5);
-  var P  = _lbPose(t, b, a, meta);
+  var a0 = _lbThumbRect(t, b);
+  var needBoxClip = !(a0.left >= w.left - .5 && a0.right <= w.right + .5 && a0.top >= w.top - .5 && a0.bottom <= w.bottom + .5);
 
   // 终点（灯箱位）姿态：灯箱里放大/平移过时取当时的 transform
   var F = { tx: 0, ty: 0, s: 1, r: parseFloat(getComputedStyle(img).borderRadius) || 10 };
   if(_lbFromTf){ try{ var mx = new DOMMatrix(_lbFromTf); F.tx = mx.e; F.ty = mx.f; F.s = mx.a || 1; }catch(e){} }
 
-  // 弧线中点（同 _lbMidTransform）
-  var d = Math.hypot(P.tx, P.ty) || 1, nx = -P.ty / d, ny = P.tx / d;
-  if(ny > 0){ nx = -nx; ny = -ny; }
-  var hh = Math.min(d * _LB_ARC_K, _LB_ARC_MAX);
-  var M = { tx: P.tx * .5 + nx * hh, ty: P.ty * .5 + ny * hh, s: P.s + (1 - P.s) * _LB_MID_GROW };
-
-  var bw = b.width, bh = b.height, Cx = bw / 2, Cy = bh / 2;
-  function f2(n){ return n.toFixed(2); }
-  function f4(n){ return n.toFixed(4); }
-
-  // u: 0 = 缩略图位，1 = 灯箱位。返回该进度下 外层窗口 / 内层大图 的 transform 与圆角
-  function sample(u){
-    var A, B, k;
-    if(u <= .5){ A = P; B = M; k = u * 2; } else { A = M; B = F; k = (u - .5) * 2; }
-    var tx = _lbLerp(A.tx, B.tx, k), ty = _lbLerp(A.ty, B.ty, k), sc = _lbLerp(A.s, B.s, k);
-    var c0 = P.ci;                                                     // [top,right,bottom,left]：灯箱图局部坐标里的裁切
-    var it = _lbLerp(c0[0], 0, u), ir = _lbLerp(c0[1], 0, u), ib = _lbLerp(c0[2], 0, u), il = _lbLerp(c0[3], 0, u);
-    var ww = bw - il - ir, wh = bh - it - ib;                          // 取景窗（局部坐标）
-    var cx = sc * ww / bw, cy = sc * wh / bh;                          // 外层非等比缩放
-    var ex = Cx + tx + sc * (il - Cx), ey = Cy + ty + sc * (it - Cy);  // 外层位移（transform-origin 0 0）
-    var ax = bw / ww, ay = bh / wh;                                    // 内层反向缩放
-    var R  = _lbLerp(P.cr, F.r, u) * sc;                               // 屏幕上的圆角半径
-    return {
-      box: 'translate(' + f2(ex) + 'px,' + f2(ey) + 'px) scale(' + f4(cx) + ',' + f4(cy) + ')',
-      img: 'scale(' + f4(ax) + ',' + f4(ay) + ') translate(' + f2(-il) + 'px,' + f2(-it) + 'px)',
-      br:  f2(R / cx) + 'px / ' + f2(R / cy) + 'px'                    // 椭圆圆角：被非等比缩放后在屏幕上恰好是正圆
-    };
-  }
-  var N = 40, boxKF = [], imgKF = [];
-  for(var i = 0; i <= N; i++){
-    var p = i / N, e = _lbEaseFn(p), u = dir === 'in' ? e : 1 - e, sm = sample(u);
-    boxKF.push({ offset: p, transform: sm.box, borderRadius: sm.br });
-    imgKF.push({ offset: p, transform: sm.img });
-  }
-
   var FV = _lbParseFilter(dir === 'in' ? meta.filter : (meta.rest || meta.filter));   // 缩略图端的滤镜
   var hasFilter = Math.abs(FV.b - 1) > .002 || Math.abs(FV.s - 1) > .002 || Math.abs(FV.c - 1) > .002;
 
-  var prevTr = img.style.transition, prevBR = img.style.borderRadius;
-  img.style.transition = 'none';                       // 防止残留的 CSS transition 干扰
-  img.style.borderRadius = '0px';                      // 圆角改由外层取景窗负责（避免内层被拉伸后圆角变形）
-
-  var OPT = { duration: dur, easing: 'linear', fill: 'both' };
-  var bAnim = box.animate(boxKF, OPT);
-  var iAnim = img.animate(imgKF, OPT);
-
-  // 滤镜（缩略图暗色调 ⇄ 原色）：同样走合成器，缓动与位移一致
+  /* 滤镜（缩略图的暗色调 ⇄ 原色）交给 WAAPI：filter 是可由合成器线程驱动的属性，
+     不占主线程；以前每帧 JS 拼 filter 字符串并写入，大图每帧都要重新提交 + 重绘，手机上最容易掉帧。
+     缓动曲线与 JS 进度同一条，视觉不变。不支持时回退到逐帧 JS 写入。 */
   var fAnim = null;
-  if(hasFilter){
+  if(hasFilter && img.animate){
     var _idleF = 'brightness(1) saturate(1) contrast(1)';
     var _thumbF = 'brightness(' + FV.b + ') saturate(' + FV.s + ') contrast(' + FV.c + ')';
     try{
@@ -3682,24 +3634,11 @@ function _lbDrive(img, t, b, dir, dur){
     }catch(e){ fAnim = null; }
   }
 
-  // 缩略图被 tab 栏 / 容器边缘遮住一部分时：外层 .lb-col 套一个「可见窗口」clip-path（仅此情形才有主线程开销）
-  var cAnim = null;
-  if(needWin && col){
-    var cb = col.getBoundingClientRect();
-    var cl = function(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); };
-    var vl = cl(a.left, w.left, w.right), vr = cl(a.right, w.left, w.right),
-        vt = cl(a.top, w.top, w.bottom),  vb = cl(a.bottom, w.top, w.bottom);
-    var ins = function(l, tp, r, bt){
-      return 'inset(' + [tp - cb.top, cb.right - r, cb.bottom - bt, l - cb.left].map(function(n){ return n.toFixed(1) + 'px'; }).join(' ') + ')';
-    };
-    var small = ins(vl, vt, vr, vb), full = ins(0, 0, VW, VH);
-    try{
-      cAnim = col.animate(dir === 'in' ? [{ clipPath: small }, { clipPath: full }] : [{ clipPath: full }, { clipPath: small }],
-                          { duration: dur, easing: _LB_EASE, fill: 'both' });
-    }catch(e){ cAnim = null; }
-  }
+  var prevTr = img.style.transition;
+  img.style.transition = 'none';                       // 防止残留的 CSS transition 把每帧写入再平滑一遍（=额外延迟）
 
   // ── 飞行期间锁滚动（业界做法：PhotoSwipe 等灯箱库都不在飞行中跟随滚动）──
+  //    飞行只有 ~0.5s，锁住后缩略图位置恒定，不再有「主线程读到旧位置」的延迟，动画必然顺滑。
   //    用事件拦截而不是改 overflow：改 overflow 会让滚动条消失、布局位移，缩略图位置就变了。
   function _stopScroll(e){ if(e.ctrlKey) return; if(e.cancelable) e.preventDefault(); }
   var _scrollKeys = { 32: 1, 33: 1, 34: 1, 35: 1, 36: 1, 38: 1, 40: 1 };
@@ -3707,28 +3646,106 @@ function _lbDrive(img, t, b, dir, dur){
   window.addEventListener('wheel',     _stopScroll, { passive: false, capture: true });
   window.addEventListener('touchmove', _stopScroll, { passive: false, capture: true });
   window.addEventListener('keydown',   _stopKey,    { passive: false, capture: true });
-  var _unlocked = false;
+  // 缩略图位置只在「页面真的动过」时才重读（见 frame 里的说明）；iOS 惯性滚动也会持续触发 scroll
+  var dirtyUntil = 0;
+  function _onScrolled(){ dirtyUntil = performance.now() + 160; }
+  window.addEventListener('scroll', _onScrolled, { passive: true, capture: true });
   function _unlockScroll(){
-    if(_unlocked) return; _unlocked = true;
+    window.removeEventListener('scroll',    _onScrolled, { capture: true });
     window.removeEventListener('wheel',     _stopScroll, { capture: true });
     window.removeEventListener('touchmove', _stopScroll, { capture: true });
     window.removeEventListener('keydown',   _stopKey,    { capture: true });
   }
 
-  var h = { onfinish: null, effect: null, _dead: false };
-  Object.defineProperty(h, 'playState', { get: function(){ return h._dead ? 'idle' : bAnim.playState; } });
+  var h = { playState: 'running', onfinish: null, effect: null, _raf: 0, _dead: false };
   h.cancel = function(){
     if(h._dead) return; h._dead = true;
     _unlockScroll();
-    [bAnim, iAnim, cAnim, fAnim].forEach(function(x){ if(x){ x.onfinish = null; try{ x.cancel(); }catch(e){} } });
-    img.style.transition = prevTr; img.style.borderRadius = prevBR;
+    if(h._raf){ cancelAnimationFrame(h._raf); h._raf = 0; }
+    if(fAnim){ try{ fAnim.cancel(); }catch(e){} fAnim = null; }
+    h.playState = 'idle';
+    img.style.transform = ''; img.style.clipPath = ''; img.style.filter = ''; img.style.transition = prevTr;
+    box.style.clipPath = '';
     _lbWinCache = null; _lbBoxCache = null;
   };
-  bAnim.onfinish = function(){
+
+  // 滚动延迟补偿：合成器线程滚动，主线程读到的位置总慢 1~2 帧 → 沿速度方向前推
+  var LEAD_MS = 22, LEAD_MAX = 56;
+  var prev = null, vx = 0, vy = 0, t0 = 0;
+  var nRead = 0, wasActive = false, cA = null, cP = null, cM = null;
+
+  function frame(now){
+    h._raf = 0;
     if(h._dead) return;
-    _unlockScroll();
-    var f = h.onfinish; if(f) f.call(h);
-  };
+    if(!t0) t0 = now;
+    var p = Math.min(1, Math.max(0, (now - t0) / dur));
+    var u = dir === 'in' ? _lbEaseFn(p) : 1 - _lbEaseFn(p);     // 0 = 缩略图位，1 = 灯箱位
+
+    // ── 读 + 算 ──
+    // 飞行期间页面被锁滚动，缩略图位置恒定 → 不需要每帧 getBoundingClientRect
+    // （写后立刻读会强制样式/布局重算，是手机掉帧的主因之一）。
+    // 只在前两帧、以及检测到 scroll（含 iOS 惯性）后的 160ms 内才重读；停下来后再做一次「无前推」的校准读。
+    var active = nRead < 2 || now < dirtyUntil;
+    var a, P, M;
+    if(active || wasActive){
+      nRead++;
+      a = _lbThumbRect(t, b);
+      if(active){
+        if(prev && now > prev.t){
+          var dt = Math.min(now - prev.t, 50);
+          vx = vx * .5 + ((a.left - prev.x) / dt) * .5;
+          vy = vy * .5 + ((a.top  - prev.y) / dt) * .5;
+        }
+        prev = { x: a.left, y: a.top, t: now };
+        var lx = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vx * LEAD_MS));
+        var ly = Math.max(-LEAD_MAX, Math.min(LEAD_MAX, vy * LEAD_MS));
+        if(Math.abs(lx) < .3) lx = 0; if(Math.abs(ly) < .3) ly = 0;
+        if(lx || ly) a = { left: a.left + lx, top: a.top + ly, right: a.right + lx, bottom: a.bottom + ly, width: a.width, height: a.height };
+      } else { vx = vy = 0; prev = null; }
+      P = _lbPose(t, b, a, meta);
+      var d = Math.hypot(P.tx, P.ty) || 1, nx = -P.ty / d, ny = P.tx / d;       // 弧线中点（同 _lbMidTransform）
+      if(ny > 0){ nx = -nx; ny = -ny; }
+      var hh = Math.min(d * _LB_ARC_K, _LB_ARC_MAX);
+      M = { tx: P.tx * .5 + nx * hh, ty: P.ty * .5 + ny * hh, s: P.s + (1 - P.s) * _LB_MID_GROW };
+      cA = a; cP = P; cM = M;
+    } else { a = cA; P = cP; M = cM; }
+    wasActive = active;
+
+    var A, B, k;
+    if(u <= .5){ A = P; B = M; k = u * 2; } else { A = M; B = F; k = (u - .5) * 2; }
+    var tx = _lbLerp(A.tx, B.tx, k), ty = _lbLerp(A.ty, B.ty, k), sc = _lbLerp(A.s, B.s, k);
+    var c0 = P.ci, r = _lbLerp(P.cr, F.r, u);
+    var clip = 'inset(' + _lbLerp(c0[0], 0, u).toFixed(2) + 'px ' + _lbLerp(c0[1], 0, u).toFixed(2) + 'px ' +
+               _lbLerp(c0[2], 0, u).toFixed(2) + 'px ' + _lbLerp(c0[3], 0, u).toFixed(2) + 'px round ' + r.toFixed(2) + 'px)';
+
+    // 外层遮挡窗：可见矩形 ⇄ 整个视口
+    function cl(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
+    var vl = cl(a.left, w.left, w.right), vr = cl(a.right, w.left, w.right),
+        vt = cl(a.top, w.top, w.bottom),  vb = cl(a.bottom, w.top, w.bottom);
+    var s0 = [vt - bx.top, bx.right - vr, bx.bottom - vb, vl - bx.left];
+    var f0 = [-bx.top, bx.right - VW, bx.bottom - VH, -bx.left];
+    var boxClip = 'inset(' + [0,1,2,3].map(function(i){ return _lbLerp(s0[i], f0[i], u).toFixed(1) + 'px'; }).join(' ') + ')';
+
+    // ── 写（img 与 box 同帧、一次写完）──
+    img.style.transform = 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + sc.toFixed(4) + ')';
+    img.style.clipPath  = clip;
+    // 滤镜随同一进度 u 平滑过渡（缩略图的暗色调 ⇄ 灯箱里的原色），不再在起点/终点跳变
+    if(hasFilter && !fAnim){
+      var fb = _lbLerp(FV.b, 1, u), fs = _lbLerp(FV.s, 1, u), fc = _lbLerp(FV.c, 1, u);
+      img.style.filter = (u > .998) ? '' : 'brightness(' + fb.toFixed(3) + ') saturate(' + fs.toFixed(3) + ') contrast(' + fc.toFixed(3) + ')';
+    }
+    if(needBoxClip) box.style.clipPath = boxClip;
+
+    if(p >= 1){
+      h.playState = 'finished';
+      _unlockScroll();
+      var f = h.onfinish; if(f) f.call(h);
+      return;
+    }
+    h._raf = requestAnimationFrame(frame);
+  }
+  frame(performance.now());          // 第一帧同步写入（等价于原来的 fill:'backwards'，不会闪一下终态）
+  if(!h._dead && h.playState === 'running' && !h._raf) h._raf = requestAnimationFrame(frame);
   return h;
 }
 // 打开：缩略图原位 → 灯箱位置（缩略图在哪都飞：半遮住 / 滚走了 / 在别的 tab / 不存在）
@@ -3829,7 +3846,6 @@ function _lbFlyOut(){
           if(_lbAnimBox){ try{ _lbAnimBox.cancel(); }catch(e){} _lbAnimBox = null; }
           _lbFromTf = '';
           _lbFlyState(false);
-          _lbUnlockBody();
           if(th){                                    // 滤镜交还给 CSS：静止态无变化；仍在 hover 时 .4s 平滑过渡
             th.style.willChange = '';
             th.style.removeProperty('transition');
@@ -4099,7 +4115,6 @@ function openLb(idx){
   _lbShow(idx, true);
 }
 
-function _lbUnlockBody(){ if(!window._lbOpen) document.body.style.overflow = ''; }
 function closeLb(){
   var _lbElNow = document.getElementById('lb');
   if(!_lbElNow.classList.contains('on')) return;   // 已经在关闭中，避免重复触发
@@ -4117,14 +4132,12 @@ function closeLb(){
   lb.removeEventListener('touchmove', window._lbTouchMove);
   lb.style.alignItems='';
   lb.style.overflowY='';
-  // body 的 overflow 还原会让整页重新布局（60+ 张图），放在飞回的第一帧会顿一下 → 推迟到飞回结束再还原
-  if(_resetDelay <= 0) _lbUnlockBody();
+  document.body.style.overflow='';
   if(_lbCloseTmr){ clearTimeout(_lbCloseTmr); _lbCloseTmr = null; }
   // 等灯箱淡出完成后再重置样式
   _lbCloseTmr = setTimeout(function(){
     _lbCloseTmr = null;
     if(window._lbOpen) return;      // 期间又打开了，绝不能把新图清掉
-    _lbUnlockBody();
     document.getElementById('lb').style.visibility = '';
     var img    = document.getElementById('lbImg');
     var imgBox = document.getElementById('lbImgBox');
