@@ -7,6 +7,107 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+<script>
+/* ═══ PERF PROBE：访问 ?perf=1 启用（或 localStorage.perf='1'），不加参数时完全不运行 ═══ */
+(function(){
+  var on=/[?&]perf=1/.test(location.search); try{ on=on||localStorage.getItem('perf')==='1'; }catch(e){}
+  if(!on) return;
+  var P=window.__perf={frames:0,jank:[],long:[],canvasMs:0,maxCanvas:0};
+  var T0=performance.now(), last=T0, worst=0, hist={ok:0,m24:0,m34:0,m50:0,m100:0};
+  var css=function(c){return 'color:'+c+';font-weight:bold'};
+  function rel(){return Math.round(performance.now())}   // 相对页面导航起点（含加载）
+
+  // 1) 逐帧：>24ms 记为掉帧，并抓“此刻正在跑的动画”
+  function activeAnims(){
+    try{
+      return document.getAnimations().filter(function(a){return a.playState==='running'}).map(function(a){
+        var t=a.effect&&a.effect.target, n=a.animationName||('transition:'+(a.transitionProperty||'?'));
+        var id=t?(t.tagName.toLowerCase()+(t.id?'#'+t.id:'')+(t.className&&t.className.baseVal===undefined&&t.className?'.'+String(t.className).trim().split(/\s+/).slice(0,2).join('.'):'')):'?';
+        return n+' → '+id;
+      });
+    }catch(e){return []}
+  }
+  function frame(now){
+    var dt=now-last; last=now; P.frames++;
+    if(dt<=17.5)hist.ok++; else if(dt<=24)hist.m24++; else if(dt<=34)hist.m34++; else if(dt<=50)hist.m50++; else hist.m100++;
+    if(dt>worst)worst=dt;
+    if(dt>24){
+      var an=activeAnims(), rec={t:rel(),dt:Math.round(dt),canvasMs:+P.canvasMs.toFixed(1),anims:an.length,list:an.slice(0,12)};
+      P.jank.push(rec);
+      console.warn('%c[perf] 掉帧 '+rec.dt+'ms @'+rec.t+'ms  canvas='+rec.canvasMs+'ms  动画数='+rec.anims,css('#d97706'),rec.list);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(function(n){last=n;requestAnimationFrame(frame)});
+
+  // 2) 长任务 / 长动画帧（能看到是哪段脚本占了主线程）
+  try{ new PerformanceObserver(function(l){l.getEntries().forEach(function(e){
+    P.long.push({t:Math.round(e.startTime),dur:Math.round(e.duration)});
+    console.warn('%c[perf] 长任务 '+Math.round(e.duration)+'ms @'+Math.round(e.startTime)+'ms',css('#dc2626'));
+  })}).observe({type:'longtask',buffered:true}); }catch(e){}
+  try{ new PerformanceObserver(function(l){l.getEntries().forEach(function(e){
+    if(e.duration<50)return;
+    var sc=(e.scripts||[]).map(function(s){return s.invoker+' '+Math.round(s.duration)+'ms'});
+    console.warn('%c[perf] LoAF '+Math.round(e.duration)+'ms  渲染等待='+Math.round(e.renderStart?e.startTime+e.duration-e.renderStart:0)+'ms  样式布局='+Math.round(e.styleAndLayoutStart?e.startTime+e.duration-e.styleAndLayoutStart:0)+'ms',css('#dc2626'),sc);
+  })}).observe({type:'long-animation-frame',buffered:true}); }catch(e){}
+
+  // 3) A/B 开关：在 console 里 __perfToggle('blur') 逐项关掉，看掉帧是否消失
+  var st=document.createElement('style'); st.id='__perfStyle'; var off={};
+  var RULES={
+    blur:'*,*::before,*::after{filter:none!important}',
+    backdrop:'*{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}',
+    noise:'body::after{display:none!important}',            // 全屏 feTurbulence 噪点层，常驻重绘嫌疑
+    willchange:'*{will-change:auto!important}',
+    shadow:'*{box-shadow:none!important;text-shadow:none!important}',
+    stars:'#starsBg{display:none!important}'
+  };
+  function css2(){st.textContent=Object.keys(off).filter(function(k){return off[k]&&RULES[k]}).map(function(k){return RULES[k]}).join('\n')}
+  document.addEventListener('DOMContentLoaded',function(){document.head.appendChild(st)});
+  window.__perfToggle=function(k){
+    if(k==='canvas'){window.__perfSkipCanvas=!window.__perfSkipCanvas;console.log('[perf] canvas 绘制 '+(window.__perfSkipCanvas?'已关闭':'已开启'));return}
+    if(!RULES[k]){console.log('[perf] 可选：canvas, '+Object.keys(RULES).join(', '));return}
+    off[k]=!off[k]; css2(); console.log('[perf] '+k+' '+(off[k]?'已关闭':'已开启'));
+  };
+  window.__perfReplay=function(){ // 一键关闭某项后重放入场：刷新并保持 perf=1
+    try{localStorage.setItem('perf','1')}catch(e){} location.reload();
+  };
+
+  // 4) 报告：入场后 6s 自动输出，之后随时 __perfReport()
+  window.__perfReport=function(){
+    var secs=(performance.now()-T0)/1000, n=P.frames||1;
+    console.group('%c[perf] 报告（采样 '+secs.toFixed(1)+'s）',css('#2563eb'));
+    console.log('平均帧率 ≈ '+(n/secs).toFixed(1)+' fps，最差一帧 '+Math.round(worst)+'ms，canvas 最大单帧 '+P.maxCanvas.toFixed(1)+'ms');
+    console.table({'≤17ms':hist.ok,'17–24ms':hist.m24,'24–34ms':hist.m34,'34–50ms':hist.m50,'>50ms':hist.m100});
+    if(P.jank.length){
+      console.log('掉帧集中时间段（每 250ms 一桶）：');
+      var b={}; P.jank.forEach(function(j){var k=Math.floor(j.t/250)*250;b[k]=(b[k]||0)+1});
+      console.table(b);
+      var cnt={}; P.jank.forEach(function(j){j.list.forEach(function(x){cnt[x]=(cnt[x]||0)+1})});
+      var top=Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]}).slice(0,10).map(function(k){return {动画:k,掉帧时在跑:cnt[k]}});
+      console.log('掉帧时最常同时在跑的动画：'); console.table(top);
+    } else console.log('%c没有 >24ms 的掉帧 ✓',css('#16a34a'));
+    console.log('长任务 '+P.long.length+' 个');
+    console.groupEnd();
+  };
+  // 5) 时间线标记：把“那一次大卡顿”对到具体事件上
+  function mark(n){console.log('%c[perf] ◆ '+n+' @'+rel()+'ms',css('#7c3aed'))}
+  document.addEventListener('DOMContentLoaded',function(){mark('DOMContentLoaded')});
+  window.addEventListener('load',function(){mark('window.load')});
+  try{document.fonts.ready.then(function(){mark('fonts.ready')})}catch(e){}
+  document.addEventListener('mousemove',function(){mark('首次鼠标移动');},{once:true,capture:true});
+  new MutationObserver(function(){var h=document.documentElement.classList;
+    if(h.contains('reveal-ready')&&!mark.r){mark.r=1;mark('reveal-ready')}
+    if(h.contains('intro-done')&&!mark.d){mark.d=1;mark('intro-done')}
+  }).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+  // 6) 主线程“空白”检测：每 16ms 的定时器若被拖到 >80ms，说明主线程被占住（含脚本之外的解码/字体/布局）
+  var _tl=performance.now();
+  setInterval(function(){var n=performance.now(),g=n-_tl-16;_tl=n;
+    if(g>80)console.warn('%c[perf] 主线程停滞 '+Math.round(g)+'ms @'+rel()+'ms',css('#dc2626'))},16);
+  setTimeout(function(){window.__perfReport()},6000);
+  console.log('%c[perf] 探针已启用。__perfToggle("blur"|"backdrop"|"noise"|"willchange"|"shadow"|"stars"|"canvas") 做 A/B，__perfReport() 看报告',css('#2563eb'));
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金航滔博客 | Jin Hangtao</title>
@@ -212,7 +313,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   --ease-out:cubic-bezier(.22,1,.36,1);
   --spring:var(--ease-ios);
   --spring-pop:cubic-bezier(.34,1.56,.64,1);
-  --blur-in:8px;
+  --blur-in:4px;   /* 桌面也用手机那套：半径 ≤4px */
 }
 @supports (animation-timing-function:linear(0,1)){
   :root{--spring:linear(0,0.008,0.0297,0.0622,0.1031,0.15,0.2012,0.255,0.3101,0.3655,0.4201,0.4734,0.5247,0.5737,0.6199,0.6633,0.7037,0.741,0.7753,0.8066,0.8349,0.8604,0.8833,0.9037,0.9216,0.9374,0.9512,0.9632,0.9734,0.9821,0.9895,0.9956,1.0006,1.0047,1.008,1.0105,1.0123,1.0137,1.0145,1.015,1.0152,1.0151,1.0147,1.0143,1);}
@@ -220,7 +321,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 @supports (animation-timing-function:linear(0,1)){
   :root{--spring-pop:linear(0,0.0142,0.0531,0.1113,0.1839,0.2663,0.3545,0.4452,0.5353,0.6225,0.7049,0.781,0.85,0.911,0.9638,1.0084,1.045,1.074,1.0959,1.1113,1.121,1.1256,1.126,1.1228,1.1168,1.1087,1.0989,1.0882,1.0768,1.0654,1.0541,1.0433,1.0332,1.024,1.0157,1.0084,1.0021,0.9969,0.9927,0.9894,0.987,0.9854,0.9844,0.984,0.9842,0.9848,0.9856,0.9868,1);}
 }
-@media(hover:none){:root{--blur-in:4px;}}
 
 /* 外层：快速淡入 + 弹簧位移 + 轻微对焦 */
 .reveal-ready .sb{
@@ -255,7 +355,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .reveal-ready .sb > *:nth-child(-n+3){
   animation:
     itemFade .7s var(--ease-out) backwards,
-    itemBlur .7s var(--ease-out) backwards,
     itemMove 1.1s var(--spring) backwards;
   animation-delay:var(--d,480ms);
 }
@@ -281,32 +380,26 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .sb > *:nth-child(3){--d:400ms;--b:calc(var(--blur-in) * 1.2);}
 .sb > *:nth-child(n+4){--d:480ms;--b:calc(var(--blur-in) * 1.2);}
 @keyframes itemFade{from{opacity:0;}}
-@keyframes itemBlur{from{filter:blur(min(var(--b,var(--blur-in)),6px));}}
 @keyframes itemMove{from{transform:translateY(12px) scale(.98);}}
 
-/* 背景星空：虚焦 + 微放大 → 慢慢对焦（用独立的 scale 属性，不影响视差 transform） */
+/* 背景星空：入场只淡入（不做 scale，避免整张大 canvas 被重新合成/缩放） */
 .reveal-ready #starsBg{
-  animation:
-    bgFade 1.1s var(--ease-out) both,
-    bgScale 2.2s var(--ease-ios) both;
+  animation:bgFade 1.1s var(--ease-out) both;
 }
 @keyframes bgFade{from{opacity:0;}to{opacity:1;}}
-@keyframes bgScale{from{scale:1.06;}to{scale:1;}}
 
 /* about panel 内容逐段错开 */
 .ph-reveal{
   opacity:0;
   transform:translateY(18px) scale(.992);
-  filter:blur(calc(var(--blur-in) * .7));
   transition:opacity .8s var(--ease-out),
-             filter 1s var(--ease-out),
              transform 1.25s var(--spring);
   will-change:opacity,transform;
 }
 /* 标题块：主体，最先出现，模糊更轻，对焦更快 */
 .ph-reveal.ph-focal{
   transform:translateY(10px) scale(.996);
-  filter:blur(calc(var(--blur-in) * .3));
+  filter:blur(3px);
   transition:opacity .55s var(--ease-out),
              filter .65s var(--ease-out),
              transform 1.1s var(--spring);
@@ -512,8 +605,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   position:sticky;
   top:0;
   z-index:100;
-  will-change:backdrop-filter,background;
-  transform:translateZ(0);
+  /* will-change 由 JS 在滚动渐变期间临时加上，停下即撤 */
 }
 .tab{
   padding:16px 0;margin-right:30px;
@@ -2684,9 +2776,10 @@ if(isTouch){
   }
   document.addEventListener('mousemove',function(e){
     mx=e.clientX;my=e.clientY;
-    cur.style.left=mx+'px';cur.style.top=my+'px';
+    cur.style.translate=mx+'px '+my+'px';
     if(!started){ox=mx;oy=my;started=true;}
     showCursor();
+    curKick();
   });
   document.addEventListener('mousedown',function(){
     showCursor();
@@ -2706,7 +2799,16 @@ if(isTouch){
       cur.removeEventListener('animationend',h);
     });
   });
-  (function tick(){ox+=(mx-ox)*.14;oy+=(my-oy)*.14;curR.style.left=ox+'px';curR.style.top=oy+'px';requestAnimationFrame(tick);})();
+  // 光环跟随：用独立的 translate 属性（不在 CSS transition 列表里，也不触发布局）
+  // 只在鼠标移动、环还没追上时跑 rAF，静止时不再每帧空转
+  var curRun=false;
+  function curTick(){
+    ox+=(mx-ox)*.14; oy+=(my-oy)*.14;
+    if(Math.abs(mx-ox)<.05&&Math.abs(my-oy)<.05){ ox=mx; oy=my; curRun=false; }
+    curR.style.translate=ox.toFixed(1)+'px '+oy.toFixed(1)+'px';
+    if(curRun) requestAnimationFrame(curTick);
+  }
+  function curKick(){ if(!curRun){ curRun=true; requestAnimationFrame(curTick); } }
   document.addEventListener('mouseover',function(e){
     var t=e.target.closest('a,button,.gi,.gi1,.sb-link,.stat-box,.blog-expand-btn');
     if(t){
@@ -2736,8 +2838,8 @@ if(isTouch){
   var mainEl = document.querySelector('.main');
   if(!mainEl) return;
 
-  // Current animated value (0→1), lerps toward target each frame
-  var cur = 0, target = 0;
+  // Current animated value (0→1), lerps toward target
+  var cur = 0, target = 0, running = false, started = false;
 
   function getTarget(){
     var s = mainEl.scrollTop;
@@ -2749,25 +2851,47 @@ if(isTouch){
 
   function apply(t){
     var bg    = (t * 0.88).toFixed(3);
-    var blur  = (t * 20).toFixed(1);
-    var sat   = (1 + t * 0.35).toFixed(2);
     var bdr   = (t * 0.52).toFixed(3);
+    var bf    = t === 0 ? 'none'
+              : 'blur(' + (t * 20).toFixed(1) + 'px) saturate(' + (1 + t * 0.35).toFixed(2) + ')';
     topbar.style.background = 'rgba(18,17,16,' + bg + ')';
-    topbar.style.backdropFilter = 'blur(' + blur + 'px) saturate(' + sat + ')';
-    topbar.style.webkitBackdropFilter = 'blur(' + blur + 'px) saturate(' + sat + ')';
+    topbar.style.backdropFilter = bf;
+    topbar.style.webkitBackdropFilter = bf;
     topbar.style.borderBottomColor = 'rgba(38,35,32,' + bdr + ')';
   }
 
-  (function tick(){
-    requestAnimationFrame(tick);
-    if(window._lbOpen||window._lbFlying) return;
+  function stop(){ running = false; topbar.style.willChange = ''; }
+  function frame(){
+    if(window._lbOpen||window._lbFlying){ stop(); return; }
     target = getTarget();
     // lerp speed: fast when scrolling down, slightly slower coming back up
     var speed = target > cur ? 0.12 : 0.08;
     cur += (target - cur) * speed;
     if(Math.abs(target - cur) < 0.001) cur = target;
     apply(cur);
-  })();
+    if(cur === target){ stop(); return; }   // 追上目标就停，不再每帧空转
+    requestAnimationFrame(frame);
+  }
+  function kick(){
+    if(!started || running) return;
+    running = true;
+    topbar.style.willChange = 'background,backdrop-filter';   // 只在渐变期间提升合成层
+    requestAnimationFrame(frame);
+  }
+  mainEl.addEventListener('scroll', kick, {passive:true});
+  document.addEventListener('panelChanged', kick);
+
+  // 入场动画期间不启动，等 intro-done 再开始（兜底 4.5s）
+  var root = document.documentElement;
+  function start(){ if(started) return; started = true; kick(); }
+  if(root.classList.contains('intro-done')){ start(); }
+  else {
+    var mo = new MutationObserver(function(){
+      if(root.classList.contains('intro-done')){ mo.disconnect(); start(); }
+    });
+    mo.observe(root, {attributes:true, attributeFilter:['class']});
+    setTimeout(function(){ mo.disconnect(); start(); }, 4500);
+  }
 })();
 
 // ── Scroll-linked title compression (desktop + touch tablets) ──
@@ -4929,7 +5053,8 @@ function triggerStmtPoem(){
   var c=document.getElementById('starsBg');
   var ctx=c.getContext('2d');
   var W,H;
-  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+  var _dirty=true, planetCv=null, ringCv=null, ringHalf=0, pgeo=null;
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;_dirty=true;}
   resize();
   window.addEventListener('resize',resize);
 
@@ -4996,12 +5121,137 @@ function triggerStmtPoem(){
     }
   });
 
+
+  // 近景大星的光晕精灵（只建一次）
+  var glowSprite=(function(){
+    var cv=document.createElement('canvas'); cv.width=cv.height=64;
+    var g=cv.getContext('2d');
+    var gr=g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(255,245,200,0.3)');
+    gr.addColorStop(1,'rgba(255,245,200,0)');
+    g.fillStyle=gr; g.fillRect(0,0,64,64);
+    return cv;
+  })();
+
+  // 星球预渲染：只在 resize 后的第一帧重建（坐标取整，避免亚像素抗锯齿开销）
+  function buildPlanet(){
+    _dirty=false;
+    var isMob=W<768;
+    var r=Math.round(isMob?pl.r*0.65:pl.r);
+    var px=Math.round(isMob?(W+r*0.08):(pl.x*W));
+    var py=Math.round(isMob?(H*0.25):(pl.y*H));
+    pgeo={px:px,py:py,r:r};
+
+    // 静态层：scatter / glow / body / atmo / edge / sh / hl
+    planetCv=planetCv||document.createElement('canvas');
+    planetCv.width=W; planetCv.height=H;
+    var pc=planetCv.getContext('2d');
+    // 超遠大氣散射（最外層，極淡）
+    var scatter=pc.createRadialGradient(px,py,r*0.8,px,py,r*3.2);
+    scatter.addColorStop(0,'rgba(196,154,82,0)');
+    scatter.addColorStop(0.4,'rgba(160,120,55,0.025)');
+    scatter.addColorStop(0.75,'rgba(100,72,28,0.012)');
+    scatter.addColorStop(1,'rgba(0,0,0,0)');
+    pc.beginPath();pc.arc(px,py,r*3.2,0,Math.PI*2);
+    pc.fillStyle=scatter;pc.fill();
+
+    // 大氣輝光（中層）
+    var glow=pc.createRadialGradient(px,py,r*0.6,px,py,r*1.9);
+    glow.addColorStop(0,'rgba(196,154,82,0.08)');
+    glow.addColorStop(0.55,'rgba(140,102,38,0.035)');
+    glow.addColorStop(1,'rgba(0,0,0,0)');
+    pc.beginPath();pc.arc(px,py,r*1.9,0,Math.PI*2);
+    pc.fillStyle=glow;pc.fill();
+
+    // 本體——更多 color stop 讓過渡絲滑，消除分層感
+    var body=pc.createRadialGradient(px-r*0.12,py-r*0.12,r*0.15,px+r*0.02,py+r*0.02,r);
+    body.addColorStop(0,   'rgba(70,55,32,0.56)');
+    body.addColorStop(0.18,'rgba(68,54,30,0.58)');
+    body.addColorStop(0.35,'rgba(54,42,23,0.50)');
+    body.addColorStop(0.52,'rgba(40,31,16,0.40)');
+    body.addColorStop(0.68,'rgba(26,20,10,0.30)');
+    body.addColorStop(0.84,'rgba(14,11,5,0.18)');
+    body.addColorStop(1,   'rgba(5,4,2,0.07)');
+    pc.beginPath();pc.arc(px,py,r,0,Math.PI*2);
+    pc.fillStyle=body;pc.fill();
+
+    // 大氣邊緣——更多 stop 讓金色暈染更自然
+    var atmo=pc.createRadialGradient(px,py,r*0.72,px,py,r*1.14);
+    atmo.addColorStop(0,   'rgba(196,154,82,0)');
+    atmo.addColorStop(0.28,'rgba(196,154,82,0.018)');
+    atmo.addColorStop(0.50,'rgba(188,146,72,0.042)');
+    atmo.addColorStop(0.70,'rgba(170,128,55,0.028)');
+    atmo.addColorStop(0.88,'rgba(140,104,38,0.012)');
+    atmo.addColorStop(1,   'rgba(0,0,0,0)');
+    pc.beginPath();pc.arc(px,py,r*1.14,0,Math.PI*2);
+    pc.fillStyle=atmo;pc.fill();
+
+    // 邊緣金光輪廓——平滑過渡
+    var edge=pc.createRadialGradient(px,py,r*0.78,px,py,r);
+    edge.addColorStop(0,   'rgba(196,154,82,0)');
+    edge.addColorStop(0.45,'rgba(196,154,82,0.02)');
+    edge.addColorStop(0.72,'rgba(200,158,85,0.06)');
+    edge.addColorStop(0.88,'rgba(208,165,88,0.10)');
+    edge.addColorStop(1,   'rgba(215,172,92,0.15)');
+    pc.beginPath();pc.arc(px,py,r,0,Math.PI*2);
+    pc.fillStyle=edge;pc.fill();
+
+    // 明暗（光從左上來）——更多 stop 消除硬邊
+    var sh=pc.createRadialGradient(px+r*0.38,py+r*0.32,r*0.1,px,py,r);
+    sh.addColorStop(0,   'rgba(0,0,0,0)');
+    sh.addColorStop(0.38,'rgba(0,0,0,0)');
+    sh.addColorStop(0.58,'rgba(0,0,0,0.05)');
+    sh.addColorStop(0.72,'rgba(0,0,0,0.10)');
+    sh.addColorStop(0.86,'rgba(0,0,0,0.18)');
+    sh.addColorStop(1,   'rgba(0,0,0,0.28)');
+    pc.beginPath();pc.arc(px,py,r,0,Math.PI*2);
+    pc.fillStyle=sh;pc.fill();
+
+    // 左上高光
+    var hl=pc.createRadialGradient(px-r*0.14,py-r*0.14,r*0.08,px,py,r*0.65);
+    hl.addColorStop(0,  'rgba(255,244,200,0.14)');
+    hl.addColorStop(0.3,'rgba(255,241,192,0.08)');
+    hl.addColorStop(0.6,'rgba(255,238,185,0.03)');
+    hl.addColorStop(1,  'rgba(255,238,185,0)');
+    pc.beginPath();pc.arc(px,py,r,0,Math.PI*2);
+    pc.fillStyle=hl;pc.fill();
+
+
+    // 光环层：以星球中心为原点画一次，每帧只做旋转 + drawImage
+    ringHalf=Math.ceil(r*1.86+16);
+    ringCv=ringCv||document.createElement('canvas');
+    ringCv.width=ringCv.height=ringHalf*2;
+    var rc=ringCv.getContext('2d');
+    rc.translate(ringHalf,ringHalf);
+    var rings=[
+      {rx:r*1.38,ry:r*0.132,a:0.26,tilt:0.18},
+      {rx:r*1.62,ry:r*0.17, a:0.16,tilt:0.18},
+      {rx:r*1.86,ry:r*0.21, a:0.09,tilt:0.18},
+    ];
+    var lws=[28,20,14,9,5.5,3,1.6,0.8,0.4,0.15];
+    var wt=[[0.02,0.03,0.05,0.08,0.12,0.18,0.27,0.38,0.50,0.62],
+            [0.01,0.015,0.025,0.04,0.06,0.09,0.13,0.19,0.25,0.32]];
+    rings.forEach(function(rg){
+      lws.forEach(function(lw,li){
+        // 後半（球後）
+        rc.beginPath();rc.ellipse(0,0,rg.rx,rg.ry,rg.tilt,Math.PI,Math.PI*2);
+        rc.strokeStyle='rgba(196,154,82,'+(rg.a*wt[0][li])+')';rc.lineWidth=lw;rc.stroke();
+      });
+      lws.forEach(function(lw,li){
+        // 前半（球前，略暗）
+        rc.beginPath();rc.ellipse(0,0,rg.rx,rg.ry,rg.tilt,0,Math.PI);
+        rc.strokeStyle='rgba(196,154,82,'+(rg.a*wt[1][li])+')';rc.lineWidth=lw;rc.stroke();
+      });
+    });
+  }
+
   var t=0;
   var _tPrev=performance.now(), _pT=0;
   var _reduceMo=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   function draw(){
     requestAnimationFrame(draw);
-    if(window._lbOpen||window._lbFlying) return;
+    if(window._lbOpen||window._lbFlying||window.__perfSkipCanvas) return;
+    var __p0=window.__perf?performance.now():0;
     t+=0.01;
     // 星球进场：星星先出现，星球稍后再淡入（被打断时加速）
     var _now=performance.now(), _dt=Math.min(64,_now-_tPrev); _tPrev=_now;
@@ -5019,11 +5269,10 @@ function triggerStmtPoem(){
       var a=s.base*fl;
       var px=s.x*W, py=s.y*H;
       if(s.big){
-        var g=ctx.createRadialGradient(px,py,0,px,py,s.r*4);
-        g.addColorStop(0,'rgba(255,245,200,'+a*0.3+')');
-        g.addColorStop(1,'rgba(255,245,200,0)');
-        ctx.beginPath();ctx.arc(px,py,s.r*4,0,Math.PI*2);
-        ctx.fillStyle=g;ctx.fill();
+        var R=s.r*4;
+        ctx.globalAlpha=a;                       // 光晕 alpha 与 a 成正比 → 用 globalAlpha 调制预渲染的精灵
+        ctx.drawImage(glowSprite,px-R,py-R,R*2,R*2);
+        ctx.globalAlpha=1;
         ctx.save();ctx.globalAlpha=a*0.12;
         ctx.strokeStyle='rgba(255,248,210,1)';ctx.lineWidth=0.3;
         var len=s.r*3.5;
@@ -5056,110 +5305,17 @@ function triggerStmtPoem(){
       ctx.restore();
     });
 
-    // ── 星球 ──
+    // ── 星球：静态层与光环都已预渲染，每帧只 drawImage ──
     if(_pk>0.003){
-    ctx.save(); ctx.globalAlpha=_pk;
-    pl.rot+=0.0006; pl.rRot+=0.0004;
-    var isMob=W<768;
-    var r=isMob?pl.r*0.65:pl.r;
-    var px=isMob?(W+r*0.08):(pl.x*W);
-    var py=isMob?(H*0.25):(pl.y*H);
-
-    // 超遠大氣散射（最外層，極淡）
-    var scatter=ctx.createRadialGradient(px,py,r*0.8,px,py,r*3.2);
-    scatter.addColorStop(0,'rgba(196,154,82,0)');
-    scatter.addColorStop(0.4,'rgba(160,120,55,0.025)');
-    scatter.addColorStop(0.75,'rgba(100,72,28,0.012)');
-    scatter.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.arc(px,py,r*3.2,0,Math.PI*2);
-    ctx.fillStyle=scatter;ctx.fill();
-
-    // 大氣輝光（中層）
-    var glow=ctx.createRadialGradient(px,py,r*0.6,px,py,r*1.9);
-    glow.addColorStop(0,'rgba(196,154,82,0.08)');
-    glow.addColorStop(0.55,'rgba(140,102,38,0.035)');
-    glow.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.arc(px,py,r*1.9,0,Math.PI*2);
-    ctx.fillStyle=glow;ctx.fill();
-
-    // 本體——更多 color stop 讓過渡絲滑，消除分層感
-    var body=ctx.createRadialGradient(px-r*0.12,py-r*0.12,r*0.15,px+r*0.02,py+r*0.02,r);
-    body.addColorStop(0,   'rgba(70,55,32,0.56)');
-    body.addColorStop(0.18,'rgba(68,54,30,0.58)');
-    body.addColorStop(0.35,'rgba(54,42,23,0.50)');
-    body.addColorStop(0.52,'rgba(40,31,16,0.40)');
-    body.addColorStop(0.68,'rgba(26,20,10,0.30)');
-    body.addColorStop(0.84,'rgba(14,11,5,0.18)');
-    body.addColorStop(1,   'rgba(5,4,2,0.07)');
-    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
-    ctx.fillStyle=body;ctx.fill();
-
-    // 大氣邊緣——更多 stop 讓金色暈染更自然
-    var atmo=ctx.createRadialGradient(px,py,r*0.72,px,py,r*1.14);
-    atmo.addColorStop(0,   'rgba(196,154,82,0)');
-    atmo.addColorStop(0.28,'rgba(196,154,82,0.018)');
-    atmo.addColorStop(0.50,'rgba(188,146,72,0.042)');
-    atmo.addColorStop(0.70,'rgba(170,128,55,0.028)');
-    atmo.addColorStop(0.88,'rgba(140,104,38,0.012)');
-    atmo.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.arc(px,py,r*1.14,0,Math.PI*2);
-    ctx.fillStyle=atmo;ctx.fill();
-
-    // 邊緣金光輪廓——平滑過渡
-    var edge=ctx.createRadialGradient(px,py,r*0.78,px,py,r);
-    edge.addColorStop(0,   'rgba(196,154,82,0)');
-    edge.addColorStop(0.45,'rgba(196,154,82,0.02)');
-    edge.addColorStop(0.72,'rgba(200,158,85,0.06)');
-    edge.addColorStop(0.88,'rgba(208,165,88,0.10)');
-    edge.addColorStop(1,   'rgba(215,172,92,0.15)');
-    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
-    ctx.fillStyle=edge;ctx.fill();
-
-    // 明暗（光從左上來）——更多 stop 消除硬邊
-    var sh=ctx.createRadialGradient(px+r*0.38,py+r*0.32,r*0.1,px,py,r);
-    sh.addColorStop(0,   'rgba(0,0,0,0)');
-    sh.addColorStop(0.38,'rgba(0,0,0,0)');
-    sh.addColorStop(0.58,'rgba(0,0,0,0.05)');
-    sh.addColorStop(0.72,'rgba(0,0,0,0.10)');
-    sh.addColorStop(0.86,'rgba(0,0,0,0.18)');
-    sh.addColorStop(1,   'rgba(0,0,0,0.28)');
-    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
-    ctx.fillStyle=sh;ctx.fill();
-
-    // 左上高光
-    var hl=ctx.createRadialGradient(px-r*0.14,py-r*0.14,r*0.08,px,py,r*0.65);
-    hl.addColorStop(0,  'rgba(255,244,200,0.14)');
-    hl.addColorStop(0.3,'rgba(255,241,192,0.08)');
-    hl.addColorStop(0.6,'rgba(255,238,185,0.03)');
-    hl.addColorStop(1,  'rgba(255,238,185,0)');
-    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
-    ctx.fillStyle=hl;ctx.fill();
-
-    // 光環（10層超模糊，寬度從28到0.3）
-    ctx.save();ctx.translate(px,py);ctx.rotate(pl.rRot*0.35);
-    var rings=[
-      {rx:r*1.38,ry:r*0.132,a:0.26,tilt:0.18},
-      {rx:r*1.62,ry:r*0.17, a:0.16,tilt:0.18},
-      {rx:r*1.86,ry:r*0.21, a:0.09,tilt:0.18},
-    ];
-    var lws=[28,20,14,9,5.5,3,1.6,0.8,0.4,0.15];
-    var wt=[[0.02,0.03,0.05,0.08,0.12,0.18,0.27,0.38,0.50,0.62],
-            [0.01,0.015,0.025,0.04,0.06,0.09,0.13,0.19,0.25,0.32]];
-    rings.forEach(function(rg){
-      lws.forEach(function(lw,li){
-        // 後半（球後）
-        ctx.beginPath();ctx.ellipse(0,0,rg.rx,rg.ry,rg.tilt,Math.PI,Math.PI*2);
-        ctx.strokeStyle='rgba(196,154,82,'+(rg.a*wt[0][li])+')';ctx.lineWidth=lw;ctx.stroke();
-      });
-      lws.forEach(function(lw,li){
-        // 前半（球前，略暗）
-        ctx.beginPath();ctx.ellipse(0,0,rg.rx,rg.ry,rg.tilt,0,Math.PI);
-        ctx.strokeStyle='rgba(196,154,82,'+(rg.a*wt[1][li])+')';ctx.lineWidth=lw;ctx.stroke();
-      });
-    });
-    ctx.restore();
-    ctx.restore();
+      if(_dirty||!planetCv) buildPlanet();
+      ctx.save(); ctx.globalAlpha=_pk;
+      pl.rot+=0.0006; pl.rRot+=0.0004;
+      ctx.drawImage(planetCv,0,0);
+      ctx.translate(pgeo.px,pgeo.py); ctx.rotate(pl.rRot*0.35);
+      ctx.drawImage(ringCv,-ringHalf,-ringHalf);
+      ctx.restore();
     }
+    if(__p0){var __d=performance.now()-__p0;window.__perf.canvasMs=__d;if(__d>window.__perf.maxCanvas)window.__perf.maxCanvas=__d;}
   }
   draw();
 })();
