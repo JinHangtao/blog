@@ -1974,6 +1974,19 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
 .intro-skip .ph-reveal,.intro-skip .ph-word,.intro-skip .ph-n,.intro-skip .ph-sub,.intro-skip .ph-rule{
   transition-duration:.28s!important;transition-delay:0s!important;
 }
+
+/* ══ 触屏性能降级（手机/平板）：减少常驻合成层、离屏滤镜、全屏混合层 ══ */
+@media (hover:none),(pointer:coarse){
+  .gi,.gi1{will-change:auto;transform-style:flat}
+  .gi,.gi1,.gi img,.gi1 img{--pi-f:brightness(1)}
+  .gi img,.gi1 img,.gi:hover img,.gi1:hover img{filter:none}
+  .gi img.pi[data-pi].pi-in,.gi1 img.pi[data-pi].pi-in,
+  .gi img.pi[data-pi].pi-fast,.gi1 img.pi[data-pi].pi-fast{filter:none!important;will-change:auto}
+  /* 用半透明黑罩代替 brightness(.82) 的暗色调 */
+  .gi::before,.gi1::before{content:'';position:absolute;inset:0;background:rgba(10,9,8,.18);pointer-events:none;z-index:0}
+  body::after{display:none}              /* 全屏 feTurbulence 噪点层 */
+  .lb-img img{box-shadow:none}           /* 120px 模糊大阴影 */
+}
 </style>
 <script>
 function rippleThen(e,el,id){
@@ -3897,7 +3910,8 @@ function _lbShow(idx, opening){
   if(window._lbResetZoom) window._lbResetZoom(true);
   var d    = META[idx]||{title:'',en:'',desc:''};
   var el   = document.querySelector('[onclick="openLb('+idx+')"]');
-  var src  = el&&el.querySelector('img') ? el.querySelector('img').src : '';
+  var _thEl = el && el.querySelector('img');
+  var src  = _thEl ? (_thEl.getAttribute('data-full') ? new URL(_thEl.getAttribute('data-full'), document.baseURI).href : _thEl.src) : '';   // 有 data-full 用大图，否则回退缩略图地址
   var img  = document.getElementById('lbImg');
   var side = document.getElementById('lbSide');
   var spin = document.getElementById('lbSpinner');
