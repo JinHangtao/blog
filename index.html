@@ -6394,12 +6394,11 @@ function doCopy(btn){
     document.addEventListener('articleClose', function(){ closeWechat(); });
   })();
 
-  // ── 移动端右滑退出（overlay 向右推出，背景向左轻移）──
+  // ── 移动端右滑退出（只有 overlay 跟手向右推出，背景页面保持原位不动）──
   (function(){
     if(!('ontouchstart' in window) && navigator.maxTouchPoints === 0) return;
     var startX = 0, startY = 0, dragging = false, dirLocked = null, curX = 0;
     var THRESHOLD = 72; // px 滑过此距离触发关闭
-    var mainEl = document.querySelector('.main') || document.body;
 
     function onTouchStart(e){
       if(!overlay.classList.contains('art-on')) return;
@@ -6411,7 +6410,6 @@ function doCopy(btn){
       curX = 0;
       // 关掉所有 transition，跟手
       overlay.style.transition = 'none';
-      mainEl.style.transition  = 'none';
     }
     function onTouchMove(e){
       if(!dragging) return;
@@ -6426,56 +6424,40 @@ function doCopy(btn){
       }
       if(dirLocked !== 'h') return;
 
-      // 只接受向右滑（退出方向）
-      if(dx < 0) return;
+      // 只接受向右滑（退出方向）；反向滑动时夹到 0，避免卡在上一次位置
+      dx = Math.max(0, dx);
       curX = dx;
 
       var W = window.innerWidth;
-      // overlay 跟手右移
-      overlay.style.transform = 'translateX(' + dx + 'px)';
-      // 背景反向轻推（视差：移动约为 overlay 的 28%，产生层次感）
-      var bgShift = -(dx * 0.28);
-      mainEl.style.transform = 'translateX(' + bgShift + 'px)';
-      // 随进度轻微暗化背景（增强深度感）
       var ratio = Math.min(dx / W, 1);
-      overlay.style.opacity = (1 - ratio * 0.18).toString();
-      // overlay 随滑动轻微缩小（像被推离屏）
-      var sc = 1 - ratio * 0.04;
-      overlay.style.transform = 'translateX(' + dx + 'px) scale(' + sc.toFixed(4) + ')';
+      // 只有 overlay 跟手；背景页面（.main）保持原位不动，避免"底下的页面也跟着滑"的怪异感
+      overlay.style.opacity   = (1 - ratio * 0.12).toString();
+      overlay.style.transform = 'translateX(' + dx + 'px)';
     }
 
     function snapBack(){
-      overlay.style.transition  = 'transform .38s cubic-bezier(.34,1.28,.64,1), opacity .28s cubic-bezier(.4,0,.2,1)';
-      mainEl.style.transition   = 'transform .38s cubic-bezier(.34,1.28,.64,1)';
-      overlay.style.transform   = '';
-      overlay.style.opacity     = '';
-      mainEl.style.transform    = '';
+      // 回弹：不再用 overshoot 曲线（>1 会让 overlay 越过左边缘露出缝隙）
+      overlay.style.transition = 'transform .3s cubic-bezier(.22,.8,.3,1), opacity .25s cubic-bezier(.4,0,.2,1)';
+      overlay.style.transform  = '';
+      overlay.style.opacity    = '';
     }
 
     function flyOut(){
       var W = window.innerWidth;
-      // overlay 飞出右边
-      overlay.style.transition  = 'transform .38s cubic-bezier(.4,0,.2,1), opacity .3s cubic-bezier(.4,0,.2,1)';
-      overlay.style.transform   = 'translateX(' + W + 'px) scale(0.97)';
-      overlay.style.opacity     = '0';
-      // 背景归位（轻微回弹）
-      mainEl.style.transition   = 'transform .42s cubic-bezier(.34,1.2,.64,1)';
-      mainEl.style.transform    = '';
+      overlay.style.transition = 'transform .34s cubic-bezier(.4,0,.2,1), opacity .3s cubic-bezier(.4,0,.2,1)';
+      overlay.style.transform  = 'translateX(' + W + 'px)';
+      overlay.style.opacity    = '0';
       setTimeout(function(){
-        // 调 closeArticle 但跳过内置 transform 清理（我们已经设好了）
         overlay.classList.remove('art-on');
         overlay.setAttribute('aria-hidden','true');
         document.body.style.overflow = '';
         overlay.style.transform  = '';
         overlay.style.opacity    = '';
         overlay.style.transition = '';
-        mainEl.style.transform   = '';
-        mainEl.style.transition  = '';
-        // 触发 hash & 内容清理
         if(history.replaceState) history.replaceState(null,'','#blog');
         setTimeout(function(){ artContent.innerHTML = ''; }, 50);
         document.dispatchEvent(new CustomEvent('articleClose'));
-      }, 380);
+      }, 340);
     }
 
     function onTouchEnd(){
