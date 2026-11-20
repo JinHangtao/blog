@@ -5958,8 +5958,9 @@ function doCopy(btn){
   };
 
   // ── 多语言：按当前语言取文章标题/正文与界面文字（未选语言时原样返回）──
-  function T(a){ return (window.JHLang && JHLang.article) ? JHLang.article(a) : a; }
-  function U(k){ return (window.JHLang && JHLang.ui) ? JHLang.ui(k) : k; }
+  function T(a, l){ return (window.JHLang && JHLang.article) ? JHLang.article(a, l) : a; }
+  function U(k, l){ return (window.JHLang && JHLang.ui) ? JHLang.ui(k, l) : k; }
+  function curLang(){ return (window.JHLang && JHLang.cur) ? JHLang.cur() : 'orig'; }
 
   // ── 渲染博客列表 ──
   function renderList(list){
@@ -6002,6 +6003,7 @@ function doCopy(btn){
       var el = document.createElement('article');
       el.className = 'blog-post';
       el.id = 'post-' + a.id;
+      el._lang = curLang();
       el.innerHTML =
         '<div class="blog-meta">' +
           '<span class="blog-date">' + a.date + '</span>' +
@@ -6100,6 +6102,7 @@ function doCopy(btn){
         });
       }
 
+      wrap._bpRun = run;   // 供切换语言时按新文字重新截断
       // 字体加载完成后运行（最准确）
       if(document.fonts && document.fonts.ready){
         document.fonts.ready.then(run);
@@ -6139,17 +6142,17 @@ function doCopy(btn){
     currentId = id;
 
     var body = '';
-    d.body.forEach(function(seg){
+    d.body.forEach(function(seg, bi){
       var m = seg.match(/^<section-break>(.*)<\/section-break>$/);
       if(m){
-        body += '<div class="art-sec art-reveal"><span class="art-sec-txt">' + m[1] + '</span><div class="art-sec-line"></div></div>';
+        body += '<div class="art-sec art-reveal" data-seg="' + bi + '"><span class="art-sec-txt">' + m[1] + '</span><div class="art-sec-line"></div></div>';
       } else if(/^\s*<(img|video|figure|iframe|div)/i.test(seg)){
         var isImg = /^\s*<img/i.test(seg);
         body += isImg
           ? '<div class="art-reveal" style="margin-bottom:16px;text-align:center"><div class="art-img-wrap">' + seg + '</div></div>'
           : '<div class="art-reveal" style="margin-bottom:16px">' + seg + '</div>';
       } else {
-        body += '<p class="art-body art-reveal" style="margin-bottom:16px">' + seg + '</p>';
+        body += '<p class="art-body art-reveal" data-seg="' + bi + '" style="margin-bottom:16px">' + seg + '</p>';
       }
     });
 
@@ -6174,6 +6177,7 @@ function doCopy(btn){
         '</div>';
     }
 
+    artContent._lang = curLang();
     artContent.innerHTML =
       '<div class="art-eyebrow art-reveal">' +
         '<span class="art-num">Blog \u00b7 ' + d.num + '</span>' +
@@ -6383,26 +6387,108 @@ function doCopy(btn){
     }, 370);
   };
 
-  // ── 切换语言时由 JHLang 调用：重绘博客列表；文章正打开则就地重绘并保持滚动位置/输入内容 ──
-  window.JHArticles = { relang: function(){
-    if(!loaded) return;
-    renderList(LIST);
-    var ni = document.getElementById('artCommentName'),
-        mi = document.getElementById('artCommentMsg'),
-        sb = document.getElementById('artCommentSend');
-    if(ni) ni.placeholder = U('placeholderName');
-    if(mi) mi.placeholder = U('placeholderMsg');
-    if(sb) sb.textContent = U('Send');
-    if(currentId && overlay.classList.contains('art-on')){
-      var st = artScroll.scrollTop, nv = ni ? ni.value : '', mv = mi ? mi.value : '';
-      buildContent(currentId);
-      artContent.querySelectorAll('.art-reveal').forEach(function(el){ el.classList.add('in'); });
-      artScroll.scrollTop = st;
-      if(ni) ni.value = nv;
-      if(mi) mi.value = mv;
-      checkAutoExpandComment();
-      artScroll.dispatchEvent(new Event('scroll'));
+  // ── 切换语言（接入主页同一套动画：淡出虚化 → 换字 → 由虚到实 + 版面 FLIP 滑动）──
+  // 由 JHLang.apply() 调用：这里只“登记”哪些元素要换什么内容，真正的换字时机和动画由 apply() 统一调度。
+  // add(el, fn, silent)：silent=true 表示只换内容、不参与淡入淡出（例如被文章遮住的列表）。
+  var SEC_RE = /^<section-break>([\s\S]*)<\/section-break>$/;
+  function previewOf(body){
+    var segs = [];
+    for(var i = 0; i < body.length; i++){
+      var s0 = body[i];
+      if(/^\s*<(img|video|figure|iframe)/i.test(s0)) continue;
+      if(s0.indexOf('<section-break>') !== -1) continue;
+      var c = s0.replace(/<[^>]+>/g, '').trim();
+      if(c) segs.push(c);
     }
+    return segs.join(' ').slice(0, 600);
+  }
+  function plain(h){ return (h || '').replace(/<[^>]+>/g, ''); }
+
+  window.JHArticles = { collect: function(lang, add){
+    if(!loaded) return;
+    var open = overlay.classList.contains('art-on');
+
+    // 1) 博客列表里的每张卡片：就地换标题 / 预览 / 按钮 / 留言框提示（不重建 DOM，评论不会重新加载）
+    LIST.forEach(function(a0){
+      var card = document.getElementById('post-' + a0.id);
+      if(!card) return;
+      var from = card._lang || 'orig';
+      if(from === lang) return;
+      var o = T(a0, from), n = T(a0, lang);
+
+      var h = card.querySelector('.blog-title');
+      if(h && o.title !== n.title) add(h, function(){ h.innerHTML = n.title; }, open);
+
+      var pv = previewOf(n.body), p = card.querySelector('.bp-text');
+      if(p && previewOf(o.body) !== pv){
+        add(p, function(){
+          p.setAttribute('data-full', pv);
+          p.textContent = pv;
+          var w = document.getElementById('blog-list-container');
+          if(w && w._bpRun) w._bpRun();          // 按新文字重新截断到 3 行
+        }, open);
+      }
+
+      var bt = card.querySelector('.btn-text');
+      if(bt && U('Read Full Post', from) !== U('Read Full Post', lang)) add(bt, function(){ bt.textContent = U('Read Full Post', lang); }, open);
+      var cn = document.getElementById('cn-' + a0.commentId), cm = document.getElementById('cm-' + a0.commentId);
+      if(cn) add(cn, function(){ cn.placeholder = U('placeholderName', lang); }, true);
+      if(cm) add(cm, function(){ cm.placeholder = U('placeholderMsg', lang); }, true);
+      var sb = card.querySelector('.comment-send-btn');
+      if(sb) add(sb, function(){ sb.textContent = U('Send', lang); }, true);
+
+      add(card, function(){ card._lang = lang; }, true);
+    });
+
+    // 2) 正在阅读的文章：标题 / 副标题 / 每一段正文 / 底部文字 就地更换
+    if(currentId && open && (artContent._lang || 'orig') !== lang){
+      var from2 = artContent._lang || 'orig';
+      var a1 = ARTICLES[currentId], o2 = T(a1, from2), n2 = T(a1, lang);
+
+      var h1 = artContent.querySelector('.art-h1');
+      if(h1 && o2.title !== n2.title) add(h1, function(){ h1.innerHTML = n2.title; });
+      var sub = artContent.querySelector('.art-subtitle');
+      if(sub && n2.subtitle && o2.subtitle !== n2.subtitle) add(sub, function(){ sub.innerHTML = n2.subtitle; });
+
+      n2.body.forEach(function(seg, i){
+        if(seg === o2.body[i]) return;
+        var el = artContent.querySelector('[data-seg="' + i + '"]');
+        if(!el) return;
+        var m = seg.match(SEC_RE);
+        if(m){
+          var sp = el.querySelector('.art-sec-txt');
+          if(sp) add(sp, function(){ sp.innerHTML = m[1]; });
+        } else if(el.classList.contains('art-body')){
+          add(el, function(){ el.innerHTML = seg; });
+        }
+      });
+
+      var nx = artContent.querySelector('.art-next');
+      if(nx){
+        var ni0 = LIST.findIndex(function(a){ return a.id === nx.dataset.next; });
+        var nt = nx.querySelector('.art-next-title');
+        if(nt && ni0 !== -1){
+          var ntxt = plain(T(LIST[ni0], lang).title);
+          if(nt.textContent !== ntxt) add(nt, function(){ nt.textContent = ntxt; });
+        }
+      }
+      [['.art-next-label','Next Post'],['.art-share-label','Share'],['.art-comments-hd','Comments']].forEach(function(x){
+        var el = artContent.querySelector(x[0]);
+        if(el && U(x[1], from2) !== U(x[1], lang)) add(el, function(){ el.textContent = U(x[1], lang); });
+      });
+      var ct = artContent.querySelector('.art-copy-txt');
+      if(ct && !ct.parentNode.classList.contains('copied') && U('Copy Link', from2) !== U('Copy Link', lang)){
+        add(ct, function(){ ct.textContent = U('Copy Link', lang); });
+      }
+      add(artTitleBar, function(){ artTitleBar.textContent = plain(n2.title); });
+      add(artContent, function(){ artContent._lang = lang; }, true);
+    }
+
+    // 3) 固定在底部的留言框
+    var ni = document.getElementById('artCommentName'), mi = document.getElementById('artCommentMsg'), sb2 = document.getElementById('artCommentSend');
+    if(ni && ni.placeholder !== U('placeholderName', lang)) add(ni, function(){ ni.placeholder = U('placeholderName', lang); }, true);
+    if(mi && mi.placeholder !== U('placeholderMsg', lang)) add(mi, function(){ mi.placeholder = U('placeholderMsg', lang); }, true);
+    if(sb2 && sb2.textContent !== U('Send', lang)) add(sb2, function(){ sb2.textContent = U('Send', lang); }, true);
   }};
 
   // ── 关闭 ──
@@ -7273,6 +7359,12 @@ document.addEventListener('click',function(e){
       var nv=(v==null)?h.dataset.i18nOrig:v;
       if(h.innerHTML!==nv){ changes.push({el:h,fn:function(){ h.innerHTML=nv; }}); if(els.indexOf(h)<0) els.push(h); }
     });
+    if(window.JHArticles && JHArticles.collect){
+      JHArticles.collect(lang,function(el,fn,silent){
+        changes.push({el:el,fn:fn});
+        if(!silent && els.indexOf(el)<0) els.push(el);
+      });
+    }
     var seq=(apply._seq=(apply._seq||0)+1);
     function runFor(el){ changes.forEach(function(c){ if(c.el===el) c.fn(); }); }
     function commitAll(){ changes.forEach(function(c){ c.fn(); }); }
@@ -7290,7 +7382,7 @@ document.addEventListener('click',function(e){
 
     var OUT_D=300, OUT_E='cubic-bezier(.4,0,.7,1)', FD=900, FE='cubic-bezier(.16,1,.3,1)';
     var vh=window.innerHeight;
-    var roots=[document.querySelector('.topbar'),document.querySelector('.sb'),document.querySelector('.mob-profile'),document.querySelector('.panel.on')];
+    var roots=[document.querySelector('.topbar'),document.querySelector('.sb'),document.querySelector('.mob-profile'),document.querySelector('.panel.on'),document.querySelector('#articleOverlay.art-on')];
 
     /* 记录一批元素的位置与尺寸（视口附近、深度有限、数量有上限） */
     function snapshot(){
@@ -7426,7 +7518,6 @@ document.addEventListener('click',function(e){
 
   function setLang(id,save){
     cur=id; apply(id,save); refreshLb(save);
-    if(window.JHArticles) setTimeout(function(){ window.JHArticles.relang(); }, save?320:0);
     document.querySelectorAll('.lang-btn .lang-cur').forEach(function(el){
       el.textContent=labelFor(id);
       if(save && el.animate) el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:480,easing:'cubic-bezier(.32,.72,0,1)'});
@@ -7566,10 +7657,11 @@ document.addEventListener('click',function(e){
   if(saved!=='orig') setLang(saved,false);
   window.JHLang={set:function(id){setLang(id,true);},
     cur:function(){return cur;},
-    ui:function(k){ var e=ART_UI[k]; if(!e) return k; var v=(cur==='orig')?null:e[cur]; return v!=null?v:(e.orig!=null?e.orig:k); },
-    article:function(a){
-      if(!a||cur==='orig') return a;
-      var t=a.i18n&&a.i18n[cur]; if(!t) return a;
+    ui:function(k,l){ l=l||cur; var e=ART_UI[k]; if(!e) return k; var v=(l==='orig')?null:e[l]; return v!=null?v:(e.orig!=null?e.orig:k); },
+    article:function(a,l){
+      l=l||cur;
+      if(!a||l==='orig') return a;
+      var t=a.i18n&&a.i18n[l]; if(!t) return a;
       var o={}; for(var k in a) o[k]=a[k];
       if(t.title) o.title=t.title;
       if(t.subtitle!=null) o.subtitle=t.subtitle;
