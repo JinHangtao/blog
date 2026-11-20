@@ -2048,7 +2048,7 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
   -webkit-backdrop-filter:blur(0px);backdrop-filter:blur(0px);
   transition:left var(--d) var(--lang-ease),top var(--d) var(--lang-ease),width var(--d) var(--lang-ease),height var(--d) var(--lang-ease),
     border-radius var(--d) var(--lang-ease),background-color .3s ease,box-shadow .3s ease,-webkit-backdrop-filter .22s ease,backdrop-filter .22s ease}
-.lang-menu.show{visibility:visible}
+.lang-menu.show{visibility:visible;pointer-events:auto}
 .lang-menu.nomove{transition:none}
 .lang-menu.open{--d:.5s;pointer-events:auto;border-radius:var(--lang-rm);background-color:rgba(22,21,19,.94);
   -webkit-backdrop-filter:blur(24px) saturate(1.2);backdrop-filter:blur(24px) saturate(1.2);
@@ -6842,6 +6842,10 @@ function doCopy(btn){
     if(document.getElementById('articleOverlay').classList.contains('art-on')) return;
     var topbar = document.querySelector('.topbar');
     if(!topbar) return;
+    /* 只处理真正落在顶栏上的点击：触屏点语言菜单(或任何盖在顶栏上方的浮层)时，
+       合成的 mousedown 坐标会落在背后的 tab 上，必须忽略，否则会穿透切到 Blog 等页面 */
+    if(!e.target || !e.target.closest || !topbar.contains(e.target)) return;
+    if(e.target.closest('.lang-menu,.lang-btn')) return;
     var rect = topbar.getBoundingClientRect();
     if(e.clientY < rect.top || e.clientY > rect.bottom) return;
     if(e.clientX < rect.left || e.clientX > rect.right) return;
