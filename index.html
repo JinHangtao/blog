@@ -941,12 +941,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-desc{font-family:'Jost',sans-serif;font-weight:300;font-size:.67rem;line-height:2.1;color:var(--fg-d);letter-spacing:.04em;white-space:pre-line}
 /* 电脑端 / 平板端（横屏）灯箱文字放大；手机端（≤768px）保持原样 */
 @media (min-width:769px){
-  .lb-side{width:clamp(210px,16vw,260px);}
-  .lb-idx{font-size:.6rem;margin-bottom:14px}
-  .lb-title{font-size:clamp(1.5rem,1.3rem + .3vw,1.7rem);margin-bottom:6px}
-  .lb-en{font-size:.64rem;margin-bottom:10px}
+  .lb-side{width:clamp(200px,15vw,230px);}
+  .lb-idx{font-size:.55rem;margin-bottom:14px}
+  .lb-title{font-size:1.5rem;margin-bottom:5px}
+  .lb-en{font-size:.58rem;margin-bottom:9px}
   .lb-rule{margin-bottom:16px}
-  .lb-desc{font-size:clamp(.8rem,.72rem + .2vw,.9rem);line-height:2;letter-spacing:.035em}
+  .lb-desc{font-size:.76rem;line-height:2.05;letter-spacing:.04em}
 }
 /* ── 介绍文字：错落淡入（标题 → 英文名 → 分隔线展开 → 正文），关闭/切图时整体快速淡出 ──
    JS 仍然只切换 #lbSide 的内联 opacity（0 / 1）；这里用属性选择器读取它，驱动子元素各自的过渡。
