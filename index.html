@@ -488,7 +488,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .sb-av img{width:100%;height:100%;object-fit:cover;pointer-events:none;}
 .sb-name{
   font-family:'Playfair Display',serif;font-style:italic;font-weight:500;
-  font-size:1.12rem;color:var(--cream);letter-spacing:.02em;margin-bottom:8px;
+  font-size:1.12rem;color:var(--cream);letter-spacing:.02em;margin-bottom:0;
 }
 .sb-badge{
   font-family:'Jost',sans-serif;font-weight:400;
@@ -1443,12 +1443,17 @@ button, a, input, label, [onclick], video {
   backdrop-filter:blur(28px) saturate(1.4);
   opacity:0;
   pointer-events:none;
-  transition:opacity .35s ease, transform .35s ease;
+  visibility:hidden;                       /* 关闭时彻底不可见、不可聚焦、不参与点击命中（淡出结束后才生效） */
+  transition:opacity .35s ease, transform .35s ease, visibility 0s linear .35s;
   transform-origin:center center;
   will-change:transform,opacity;
 }
+/* 文章没打开时，里面所有东西（包括右上角 微信/X/Instagram 分享图标）一律不接收指针 */
+#articleOverlay:not(.art-on) *{pointer-events:none !important}
 #articleOverlay.art-on{
   opacity:1;
+  visibility:visible;
+  transition:opacity .35s ease, transform .35s ease, visibility 0s;
   pointer-events:all;
 }
 /* 桌面：贴合 .main 卡片位置 */
@@ -1987,6 +1992,203 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
   body::after{display:none}              /* 全屏 feTurbulence 噪点层 */
   .lb-img img{box-shadow:none}           /* 120px 模糊大阴影 */
 }
+
+/* ═══ LANGUAGE SWITCH ═══
+   设计思路（克制版）：
+   · 入口不再是一颗药丸，而是顶栏最右端的一个“文字项”，字体/字号/字距与左边的 Tab 完全一致，只是更暗一档，
+     前面隔一条 1px 发丝线——它属于导航，但不抢导航的戏
+   · 悬停：文字提亮，下方一条细线从左到右画出来。没有光斑、没有扫光
+   · 展开：从文字处向下长出一张深色小面板；行逐条轻轻淡入，高亮块平滑滑动
+   · 当前语言用站点的金色标出；其余全是中性灰 */
+:root{--lang-ease:cubic-bezier(.32,.72,0,1);--lang-pop:cubic-bezier(.3,1.35,.5,1);
+  --lang-rm:14px;--lang-ri:9px;--lang-row:40px;
+  --lang-font:'Jost',-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC',sans-serif}
+
+/* —— 入口：顶栏文字项 —— */
+.lang-btn{appearance:none;-webkit-appearance:none;margin:0;border:0;background:none;box-shadow:none;border-radius:0;
+  position:relative;display:inline-flex;align-items:center;white-space:nowrap;flex-shrink:0;
+  font-family:var(--lang-font);font-weight:400;font-size:.6rem;letter-spacing:.28em;text-transform:uppercase;line-height:normal;
+  color:rgba(130,125,119,.78);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  -webkit-tap-highlight-color:transparent;will-change:transform;
+  transition:color .5s var(--lang-ease)}
+.topbar .lang-btn{margin-left:auto;padding:16px 0;border-bottom:1px solid transparent;top:1px}
+.topbar .lang-btn::before{content:'';position:absolute;left:-20px;top:50%;width:1px;height:10px;margin-top:-4px;background:rgba(255,255,255,.1)}
+.mob-lang{padding:5px 0 3px;margin-top:2px;font-size:.54rem}
+.lang-cur{display:inline-block}
+/* 细线：悬停/展开时从左画到右 */
+.lang-btn::after{content:'';position:absolute;left:0;right:.28em;height:1px;background:currentColor;opacity:.55;
+  transform:scaleX(0);transform-origin:left center;transition:transform .6s var(--lang-ease)}
+.topbar .lang-btn::after{bottom:12px}
+.mob-lang::after{bottom:0}
+.lang-btn:focus-visible{outline:none;color:#f2ede5}
+.lang-btn:focus-visible::after,.lang-btn.is-open::after{transform:scaleX(1)}
+.lang-btn.is-open{color:#f2ede5}
+@media (hover:hover) and (pointer:fine){
+  .lang-btn:hover{color:#f2ede5}
+  .lang-btn:hover::after{transform:scaleX(1)}
+}
+.topbar .lang-btn.is-closing::after{transition-duration:.35s}
+.lang-btn.lang-btn{background-image:none !important}
+.lang-btn:active{transform:none}
+@media(max-width:768px){.topbar .lang-btn{display:none}}
+@media(min-width:769px){.mob-lang{display:none}}
+
+/* —— 面板：从入口处向下展开 —— */
+.lang-menu{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;will-change:transform;--d:.4s;position:fixed;z-index:9990;left:0;top:0;overflow:hidden;visibility:hidden;pointer-events:none;
+  background-color:rgba(22,21,19,0);border-radius:var(--lang-ri);box-shadow:inset 0 0 0 1px rgba(255,255,255,0);
+  -webkit-backdrop-filter:blur(0px);backdrop-filter:blur(0px);
+  transition:left var(--d) var(--lang-ease),top var(--d) var(--lang-ease),width var(--d) var(--lang-ease),height var(--d) var(--lang-ease),
+    border-radius var(--d) var(--lang-ease),background-color .3s ease,box-shadow .3s ease,-webkit-backdrop-filter .22s ease,backdrop-filter .22s ease}
+.lang-menu.show{visibility:visible}
+.lang-menu.nomove{transition:none}
+.lang-menu.open{--d:.5s;pointer-events:auto;border-radius:var(--lang-rm);background-color:rgba(22,21,19,.94);
+  -webkit-backdrop-filter:blur(24px) saturate(1.2);backdrop-filter:blur(24px) saturate(1.2);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 2px 4px rgba(0,0,0,.25),0 22px 44px -14px rgba(0,0,0,.7)}
+.lang-head{display:none!important}
+.lang-list{position:absolute;left:0;right:0;top:0;box-sizing:border-box;padding:6px}
+.lang-opts{position:relative}
+.lang-sep,.lang-dot{display:none}
+
+.lang-lens{position:absolute;left:0;right:0;top:0;height:var(--lang-row);border-radius:var(--lang-ri);pointer-events:none;opacity:0;
+  background:rgba(255,255,255,.05);
+  transform:translateY(var(--y,0px));transition:transform .36s var(--lang-ease),opacity .15s}
+.lang-menu.open .lang-lens{opacity:1;transition:transform .36s var(--lang-ease),opacity .3s ease .1s}
+
+.lang-opt{appearance:none;-webkit-appearance:none;position:relative;display:flex;align-items:center;justify-content:space-between;
+  width:100%;height:var(--lang-row);margin:0;padding:0 14px;background:none;border:0;border-radius:var(--lang-ri);outline:none;
+  color:rgba(236,230,220,.52);font-family:var(--lang-font);font-weight:400;font-size:.8rem;letter-spacing:.04em;text-align:left;white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;opacity:0;transition:opacity .12s,transform .3s var(--lang-pop),color .3s var(--lang-ease);
+  line-height:20px;will-change:transform,opacity;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.lang-opt>span{line-height:20px}
+.lang-opt[data-lang="zh"]>span:first-of-type{letter-spacing:.1em}
+.lang-menu.open .lang-opt{opacity:1;transition:opacity .34s ease var(--o,0s),transform .3s var(--lang-pop),color .3s var(--lang-ease);
+  animation:lang-in .45s var(--lang-ease) var(--o,0s) backwards}
+@keyframes lang-in{from{transform:translateY(4px)}}
+.lang-menu.open .lang-opt:active{transform:scale(.985)}
+.lang-opt.hot{color:#f2ede5}
+.lang-opt.on{color:var(--gold-p)}
+.lang-code{display:inline-block;font-size:.54rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(236,230,220,.26);transition:color .35s var(--lang-ease)}
+.lang-opt.hot .lang-code{color:rgba(236,230,220,.5)}
+.lang-opt.on .lang-code{color:rgba(222,187,122,.6)}
+@media (prefers-reduced-motion:reduce){
+  .lang-menu,.lang-menu *,.lang-btn,.lang-btn::after{transition-duration:.01s!important;transition-delay:0s!important;animation:none!important}
+}
+</style>
+<style id="ios-buttons">
+/* ═══════════════════════════════════════════════════════════════
+   iOS 风格按钮系统（材质层）
+   · 按压缩放 / 回弹 / 触点光晕 由下方 JS（Web Animations API）驱动
+   · 这里只负责：玻璃材质、胶囊形状、光晕的绘制、去掉与之冲突的旧 hover/active 变换
+   ═══════════════════════════════════════════════════════════════ */
+@property --gi{syntax:'<number>';inherits:false;initial-value:0}
+:root{
+  --ios-ease:cubic-bezier(.32,.72,0,1);
+  --g-fill:rgba(255,255,255,.065);
+  --g-fill-h:rgba(255,255,255,.105);
+  --g-hair:inset 0 0 0 .5px rgba(255,255,255,.13),inset 0 1px 0 rgba(255,255,255,.07);
+  --g-gold-fill:rgba(196,154,82,.11);
+  --g-gold-fill-h:rgba(196,154,82,.17);
+  --g-gold-hair:inset 0 0 0 .5px rgba(222,187,122,.42),inset 0 1px 0 rgba(255,240,205,.10);
+}
+
+/* ── 触点光晕：--gi(0→1) 由 JS 动画，--gx/--gy 是按下的位置 ── */
+.lb-btns button,.blog-open-btn,.art-send-btn,.comment-send-btn,.art-share-icon,.art-share-btn,
+.art-like-btn,.player-btn,.player-speed-btn,.audio-btn,#artBack,.lang-btn,.sb-link,.art-next{
+  background-image:
+    radial-gradient(circle 72px at var(--gx,50%) var(--gy,50%),rgba(255,244,214,calc(var(--gi) * .30)) 0%,rgba(222,187,122,calc(var(--gi) * .10)) 55%,transparent 100%),
+    linear-gradient(rgba(255,255,255,calc(var(--gi) * .075)),rgba(255,255,255,calc(var(--gi) * .075))) !important;
+}
+/* 去掉 300ms 双击缩放延迟、长按选中 */
+.lb-btns button,.blog-open-btn,.art-send-btn,.comment-send-btn,.art-share-icon,.art-share-btn,
+.art-like-btn,.player-btn,.player-speed-btn,.audio-btn,#artBack,.lang-btn,.sb-link,.tab,.art-next{
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+}
+
+/* ── 灯箱 ← → ✕：圆形玻璃按钮 ── */
+.lb-btns button{
+  width:32px;height:32px;border-radius:50%;font-size:.72rem;
+  border-color:transparent;background-color:var(--g-fill);box-shadow:var(--g-hair);
+  color:rgba(242,237,229,.82);
+}
+.lb-btns-left{gap:8px}
+.lb-btns{padding:12px 0}
+@media (hover:hover) and (pointer:fine){
+  .lb-btns button:hover{border-color:transparent;background-color:var(--g-fill-h);color:#fff}
+}
+.lb-btns button:active{border-color:transparent;color:#fff}
+
+/* ── Read Full Post：金色胶囊 ── */
+.blog-open-btn{
+  border-color:transparent;border-radius:999px;padding:10px 20px;
+  background-color:var(--g-gold-fill);box-shadow:var(--g-gold-hair);color:var(--gold-p);
+  transition:background-color .4s var(--ios-ease),box-shadow .4s var(--ios-ease),color .4s var(--ios-ease);
+}
+.blog-open-btn:hover{border-color:transparent;background-color:var(--g-gold-fill-h);transform:none}
+.blog-open-btn:active{transform:none;opacity:1}
+
+/* ── 评论发送（带内联样式，需 !important）── */
+.art-send-btn,.comment-send-btn{
+  background-color:var(--g-gold-fill) !important;border:0 !important;border-radius:999px !important;
+  box-shadow:var(--g-gold-hair) !important;color:var(--gold-p) !important;padding:9px 20px !important;
+  transition:background-color .4s var(--ios-ease),box-shadow .4s var(--ios-ease),transform .4s var(--ios-ease) !important;
+}
+.art-send-btn.sent{border:0 !important;transform:none !important;background-color:var(--g-gold-fill-h) !important}
+
+/* ── 文章顶栏分享图标 ── */
+.art-share-icon{
+  width:34px;height:34px;border-radius:50%;border-color:transparent;
+  background-color:var(--g-fill);box-shadow:var(--g-hair);color:rgba(242,237,229,.78);
+  transition:background-color .35s var(--ios-ease),color .35s var(--ios-ease),box-shadow .35s var(--ios-ease);
+}
+.art-share-icon:hover{border-color:transparent;background-color:var(--g-fill-h);color:var(--gold-p);transform:none}
+.art-share-icon.flash{border-color:transparent;background-color:var(--g-gold-fill-h);color:var(--gold-p);box-shadow:var(--g-gold-hair)}
+
+/* ── 文末 Copy Link ── */
+.art-share-btn{
+  border-color:transparent;border-radius:999px;padding:8px 16px;
+  background-color:var(--g-fill);box-shadow:var(--g-hair);
+  transition:background-color .35s var(--ios-ease),color .35s var(--ios-ease),box-shadow .35s var(--ios-ease);
+}
+.art-share-btn:hover{border-color:transparent;background-color:var(--g-fill-h)}
+.art-share-btn.primary{border-color:transparent;background-color:var(--g-gold-fill);box-shadow:var(--g-gold-hair);color:var(--gold-p)}
+.art-share-btn.primary:hover{background-color:var(--g-gold-fill-h)}
+.art-share-btn.copied{border-color:transparent}
+
+/* ── 点赞 ── */
+.art-like-btn{
+  border-radius:999px;
+  transition:color .25s var(--ios-ease),background-color .35s var(--ios-ease),transform .18s cubic-bezier(.34,1.56,.64,1);
+}
+.art-like-btn:hover{background-color:rgba(220,80,80,.09)}
+
+/* ── 返回 Blog ── */
+#artBack{
+  padding:8px 14px 8px 10px;margin-left:-10px;border-radius:999px;
+  transition:color .3s var(--ios-ease),background-color .35s var(--ios-ease);
+}
+#artBack:hover{background-color:var(--g-fill)}
+
+/* ── 播放器 ── */
+.player-btn{
+  border-color:transparent;background-color:var(--g-gold-fill);box-shadow:var(--g-gold-hair);color:var(--gold-p);
+  transition:background-color .4s var(--ios-ease);
+}
+.player-btn:hover{background-color:var(--g-gold-fill-h)}
+.player-speed-btn{
+  border-color:transparent;border-radius:999px;padding:4px 11px;color:var(--fg-d);
+  background-color:var(--g-fill);box-shadow:var(--g-hair);
+  transition:background-color .4s var(--ios-ease),color .4s var(--ios-ease),box-shadow .4s var(--ios-ease);
+}
+.player-speed-btn:hover{border-color:transparent;background-color:var(--g-fill-h);color:var(--parch)}
+.player-speed-btn.active{border-color:transparent;color:var(--gold-p);background-color:var(--g-gold-fill);box-shadow:var(--g-gold-hair)}
+
+/* ── 语言按钮：由 JS 接管按压，去掉旧的 :active 缩放 ── */
+.lang-btn:active{transform:none}
+
+/* ── 侧栏链接 / Next Post ── */
+.sb-link{border-radius:12px}
+.art-next{border-radius:14px}
 </style>
 <script>
 function rippleThen(e,el,id){
@@ -2079,7 +2281,7 @@ function rippleThen(e,el,id){
     </div>
     <div class="mob-identity">
       <div class="mob-name">Jin Hangtao</div>
-      <div class="mob-badge">Making</div>
+      <button type="button" class="mob-lang lang-btn" aria-haspopup="true" aria-expanded="false" title="Language · 语言 · Lingua"><span class="lang-cur">LANG</span></button>
     </div>
     <div class="mob-toggle" id="mobToggle">▾</div>
   </div>
@@ -2113,7 +2315,6 @@ function rippleThen(e,el,id){
   <img src="images/頭像呢.jpg" alt="Jin Hangtao" fetchpriority="high" decoding="async">
 </div>
     <div class="sb-name">Jin Hangtao</div>
-    <span class="sb-badge">Making</span>
   </div>
 
   <div class="sb-card sb-info">
@@ -2197,6 +2398,7 @@ function rippleThen(e,el,id){
     <a class="tab"    href="#" onclick="show('ps',this);return false;">Graphic</a>
     <a class="tab"    href="#" onclick="show('video',this);return false;">Video</a>
     <a class="tab"    href="#" onclick="show('stmt',this);return false;">Statement</a>
+    <button type="button" class="lang-btn" aria-haspopup="true" aria-expanded="false" title="Language · 语言 · Lingua"><span class="lang-cur">LANG</span></button>
     <div id="tabIndicator"></div>
 </div>
 
@@ -6526,6 +6728,195 @@ function doCopy(btn){
 })();
 </script>
 
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   iOS 风格按压引擎
+   · pointerdown 即刻响应（不等 click）
+   · 按下：~110ms ease-out 缩小；松手：欠阻尼弹簧回弹（可轻微过冲）
+   · 动画可被打断：从当前值接着走，不跳回起点
+   · 触点光晕（Liquid Glass 的 touch-point illumination）
+   · 手指拖出按钮 → 松开高亮；拖回 → 重新按下
+   · 触屏在滚动区内延迟 55ms 才显示按压，避免滑动时误闪
+   · 最短按压显示 120ms，快速点按也看得到反馈
+   · 键盘 Enter / Space 同样有反馈；尊重「减少动态效果」
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+  var SEL='.lb-btns button,.blog-open-btn,.art-send-btn,.comment-send-btn,.art-share-icon,.art-share-btn,'+
+          '.art-like-btn,.player-btn,.player-speed-btn,.audio-btn,#artBack,.lang-btn,.sb-link,.tab,.art-next';
+  var NOGLOW='.tab';                         // tab 用渐变文字填充，不叠光晕，只做缩放
+  var INSTANT='.lb,#artTopbar,#artCommentRow'; // 固定控件：触屏也立即响应
+  var DWELL=120;
+
+  try{ if(!Element.prototype.animate || !CSS.supports('scale','1')) return; }catch(e){ return; }
+  var canGlow=!!(window.CSS && CSS.registerProperty);
+  var rm=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
+  function reduced(){ return !!(rm && rm.matches); }
+
+  /* 弹簧曲线 → CSS linear()。ζ=.46 欠阻尼：松手时轻微过冲再落定 */
+  function spring(zeta,omega,T,N){
+    var wd=omega*Math.sqrt(1-zeta*zeta), pts=[];
+    for(var i=0;i<=N;i++){
+      var t=i/N*T;
+      var d=Math.exp(-zeta*omega*t)*(Math.cos(wd*t)+(zeta*omega/wd)*Math.sin(wd*t));
+      pts.push((1-d).toFixed(4));
+    }
+    pts[N]='1';
+    return 'linear('+pts.join(',')+')';
+  }
+  var canLinear=false; try{ canLinear=CSS.supports('animation-timing-function','linear(0,1)'); }catch(e){}
+  var SPRING=canLinear ? spring(.46,16,.62,56) : 'cubic-bezier(.34,1.56,.64,1)';
+  var SPRING_CALM=canLinear ? spring(.74,18,.5,48) : 'cubic-bezier(.22,1,.36,1)';
+  var PRESS_EASE='cubic-bezier(.22,1,.36,1)', FADE_EASE='cubic-bezier(.32,.72,0,1)';
+
+  var ST=new WeakMap(), ACTIVE=new Set();
+  function state(el){ var o=ST.get(el); if(!o){ o={}; ST.set(el,o); } return o; }
+
+  function readNow(el){
+    var cs=getComputedStyle(el);
+    var s=parseFloat(cs.scale); if(!isFinite(s)) s=1;
+    var g=parseFloat(cs.getPropertyValue('--gi')); if(!isFinite(g)) g=0;
+    return {s:s,g:g};
+  }
+  function stop(o){
+    if(o.a){ try{o.a.cancel();}catch(e){} o.a=null; }
+    if(o.b){ try{o.b.cancel();}catch(e){} o.b=null; }
+  }
+
+  /* 缩放量：小按钮缩得多（才看得出），长条/大块缩得少（iOS：大按钮≈0.96–0.98） */
+  function target(el){
+    if(reduced()) return .985;
+    if(el.matches('.lang-btn')) return .95;
+    if(el.matches('.sb-link,.art-next')) return .982;
+    if(el.matches('.tab')) return .95;
+    var r=el.getBoundingClientRect(), w=r.width, h=r.height, m=Math.min(w,h);
+    if(!m) return 1;
+    var s=1-4.5/m;
+    if(w/h>3.2) s=Math.max(s,.962);
+    return Math.min(.975,Math.max(.88,s));
+  }
+
+  function pressIn(el,o){
+    if(o.pressed) return;
+    o.pressed=true; o.pt=performance.now();
+    var c=readNow(el); stop(o);
+    o.a=el.animate([{scale:c.s},{scale:target(el)}],{duration:reduced()?80:110,easing:PRESS_EASE,fill:'forwards'});
+    if(canGlow && !el.matches(NOGLOW)){
+      try{ o.b=el.animate([{'--gi':c.g},{'--gi':1}],{duration:90,easing:'ease-out',fill:'forwards'}); }catch(e){}
+    }
+  }
+  function pressOut(el,o){
+    if(!o.pressed) return;
+    o.pressed=false;
+    var c=readNow(el); stop(o);
+    var a=el.animate([{scale:c.s},{scale:1}],{duration:reduced()?160:640,easing:reduced()?FADE_EASE:(el.matches('.lang-btn')?SPRING_CALM:SPRING),fill:'forwards'});
+    o.a=a; a.onfinish=function(){ if(o.a===a){ try{a.cancel();}catch(e){} o.a=null; } };
+    if(canGlow && !el.matches(NOGLOW)){
+      try{
+        var b=el.animate([{'--gi':c.g},{'--gi':0}],{duration:460,easing:FADE_EASE,fill:'forwards'});
+        o.b=b; b.onfinish=function(){ if(o.b===b){ try{b.cancel();}catch(e){} o.b=null; } };
+      }catch(e){}
+    }
+  }
+  function setGlow(el,x,y){
+    var r=el.getBoundingClientRect();
+    el.style.setProperty('--gx',(x-r.left).toFixed(1)+'px');
+    el.style.setProperty('--gy',(y-r.top).toFixed(1)+'px');
+  }
+
+  /* 轻触觉：Android vibrate；iOS 17.4+ 用隐藏 switch 触发系统触感（尽力而为） */
+  var hp=null;
+  function haptic(){
+    if(reduced()) return;
+    try{ if(navigator.vibrate){ navigator.vibrate(8); return; } }catch(e){}
+    try{
+      if(!hp){
+        hp=document.createElement('label'); hp.setAttribute('aria-hidden','true');
+        hp.style.cssText='position:fixed;left:-99px;top:-99px;width:1px;height:1px;opacity:0;overflow:hidden';
+        var i=document.createElement('input'); i.type='checkbox'; i.setAttribute('switch',''); i.tabIndex=-1;
+        hp.appendChild(i); document.body.appendChild(hp);
+      }
+      hp.click();
+    }catch(e){}
+  }
+
+  function pick(t){
+    var el=t && t.closest ? t.closest(SEL) : null;
+    if(!el || el.disabled || el.getAttribute('aria-disabled')==='true') return null;
+    return el;
+  }
+
+  document.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    var el=pick(e.target); if(!el) return;
+    var o=state(el);
+    clearTimeout(o.t); clearTimeout(o.rt);
+    o.id=e.pointerId; o.type=e.pointerType; o.inside=true; o.key=false;
+    setGlow(el,e.clientX,e.clientY);
+    ACTIVE.add(el);
+    var delay=(e.pointerType!=='mouse' && !el.closest(INSTANT)) ? 55 : 0;
+    if(delay){
+      o.t=setTimeout(function(){ o.t=0; if(ACTIVE.has(el) && o.inside) pressIn(el,o); },delay);
+    } else { pressIn(el,o); }
+  },{capture:true,passive:true});
+
+  document.addEventListener('pointermove',function(e){
+    if(!ACTIVE.size) return;
+    ACTIVE.forEach(function(el){
+      var o=ST.get(el); if(!o || o.key || o.id!==e.pointerId) return;
+      var r=el.getBoundingClientRect(), slop=o.type==='mouse'?0:14;
+      var inside=e.clientX>=r.left-slop && e.clientX<=r.right+slop && e.clientY>=r.top-slop && e.clientY<=r.bottom+slop;
+      if(inside){
+        setGlow(el,e.clientX,e.clientY);
+        if(!o.inside){ o.inside=true; pressIn(el,o); }
+      } else if(o.inside){
+        o.inside=false; clearTimeout(o.t); o.t=0; pressOut(el,o);
+      }
+    });
+  },{capture:true,passive:true});
+
+  function finish(e,cancelled){
+    ACTIVE.forEach(function(el){
+      var o=ST.get(el); if(!o || o.key || o.id!==e.pointerId) return;
+      ACTIVE.delete(el);
+      clearTimeout(o.t); o.t=0;
+      var tap=!cancelled && o.inside;
+      if(tap && !o.pressed && o.type!=='mouse') pressIn(el,o);   // 很快的轻点：也要让人看见高亮
+      if(tap && o.type!=='mouse') haptic();
+      var wait=o.pressed ? Math.max(0,DWELL-(performance.now()-o.pt)) : 0;
+      if(wait) o.rt=setTimeout(function(){ pressOut(el,o); },wait); else pressOut(el,o);
+    });
+  }
+  document.addEventListener('pointerup',function(e){ finish(e,false); },{capture:true,passive:true});
+  document.addEventListener('pointercancel',function(e){ finish(e,true); },{capture:true,passive:true});
+
+  /* 键盘激活 */
+  document.addEventListener('keydown',function(e){
+    if(e.repeat || (e.key!==' ' && e.key!=='Enter')) return;
+    var el=pick(e.target); if(!el) return;
+    if(e.key===' ' && el.tagName==='A') return;
+    var o=state(el); clearTimeout(o.rt);
+    o.key=true; o.type='key';
+    var r=el.getBoundingClientRect(); setGlow(el,r.left+r.width/2,r.top+r.height/2);
+    pressIn(el,o);
+  },true);
+  document.addEventListener('keyup',function(e){
+    var el=pick(e.target); if(!el) return;
+    var o=ST.get(el); if(!o || !o.key) return;
+    o.key=false;
+    var wait=Math.max(0,DWELL-(performance.now()-(o.pt||0)));
+    o.rt=setTimeout(function(){ pressOut(el,o); },wait);
+  },true);
+
+  /* 窗口失焦 / 页面隐藏：释放所有按压中的元素，避免卡在缩小状态 */
+  function releaseAll(){
+    ACTIVE.forEach(function(el){ var o=ST.get(el); if(o){ clearTimeout(o.t); pressOut(el,o); } });
+    ACTIVE.clear();
+  }
+  window.addEventListener('blur',releaseAll);
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) releaseAll(); });
+})();
+</script>
+
 <!-- 防护脚本 -->
 <script>
 // 禁用右键
@@ -6639,6 +7030,304 @@ document.addEventListener('click',function(e){
   ifr.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;border:0;touch-action:none';
   f.replaceWith(ifr);
 });
+</script>
+
+<script>
+/* ═══ LANGUAGE SWITCH ═══ */
+(function(){
+  var DICT={"Name": {"en": "Name", "it": "Nome", "zh": "姓名"}, "Period": {"en": "Period", "it": "Periodo", "zh": "出生"}, "B. 2006": {"en": "B. 2006", "it": "N. 2006", "zh": "2006 年生"}, "B . 2006": {"en": "B . 2006", "it": "N. 2006", "zh": "2006 年生"}, "Education": {"en": "Education", "it": "Formazione", "zh": "教育"}, "LAFA Affiliated High School · Accademia di Belle Arti di Roma": {"it": "Liceo annesso alla LAFA · Accademia di Belle Arti di Roma", "zh": "鲁迅美术学院附属中学 · 罗马国立美术学院"}, "LAFA Affiliated High School": {"it": "Liceo annesso alla LAFA", "zh": "鲁迅美术学院附属中学"}, "Accademia di Belle Arti di Roma": {"zh": "罗马国立美术学院"}, "Disciplines": {"en": "Disciplines", "it": "Discipline", "zh": "专业"}, "ART": {"en": "ART", "it": "ARTE", "zh": "艺术"}, "About": {"en": "About", "it": "Info", "zh": "关于"}, "Blog": {"en": "Blog", "it": "Blog", "zh": "博客"}, "Gallery": {"en": "Gallery", "it": "Galleria", "zh": "画廊"}, "3D Modeling": {"en": "3D Modeling", "it": "Modellazione 3D", "zh": "三维建模"}, "Photography": {"en": "Photography", "it": "Fotografia", "zh": "摄影"}, "AI · ComfyUI": {"en": "AI · ComfyUI", "it": "IA · ComfyUI", "zh": "人工智能 · ComfyUI"}, "Sound Design": {"en": "Sound Design", "it": "Sound design", "zh": "声音设计"}, "Graphic Design": {"en": "Graphic Design", "it": "Grafica", "zh": "平面设计"}, "Video": {"en": "Video", "it": "Video", "zh": "视频"}, "Statement": {"en": "Statement", "it": "Manifesto", "zh": "宣言"}, "© Jin Hangtao. All rights reserved.": {"it": "© Jin Hangtao. Tutti i diritti riservati.", "zh": "© Jin Hangtao. 保留所有权利。"}, "3D": {"en": "3D", "it": "3D", "zh": "三维"}, "Photo": {"en": "Photo", "it": "Foto", "zh": "摄影"}, "AI": {"en": "AI", "it": "IA", "zh": "AI"}, "Sound": {"en": "Sound", "it": "Suono", "zh": "声音"}, "Graphic": {"en": "Graphic", "it": "Grafica", "zh": "平面"}, "Artist Statement · 关于此博客和我的想法": {"en": "Artist Statement · About this blog and my thoughts", "it": "Dichiarazione d’artista · Su questo blog e sui miei pensieri"}, "此博客于19嵗开发（2025-2026），為記錄blog日常以及保存分享自己在18嵗前的創作和回憶，今天，我們還年輕。": {"en": "I built this blog at 19 (2025–2026) to record my everyday life and to keep and share the work and memories I made before turning 18. Today, we are still young.", "it": "Ho sviluppato questo blog a 19 anni (2025–2026) per raccontare la quotidianità e per conservare e condividere le opere e i ricordi creati prima dei 18 anni. Oggi siamo ancora giovani."}, "博客作品页独立栏目里的内容，创作于13至18岁之间——在鲁迅美术学院附属中学的画室，隨后在製作作品集時拓展至三维建模。後來18嵗考入罗马国立美术学院，接觸到聲音設計，摄影与 AI 生图等媒介，還在探索。": {"en": "The works in the separate sections of this blog were made between the ages of 13 and 18 — first in the studio of the high school affiliated with the Luxun Academy of Fine Arts, then expanding into 3D modeling while preparing my portfolio. At 18 I was admitted to the Accademia di Belle Arti di Roma, where I came across sound design, photography and AI image generation. I am still exploring.", "it": "Le opere nelle sezioni dedicate di questo blog sono state create tra i 13 e i 18 anni: prima nello studio del liceo annesso all’Accademia di Belle Arti Luxun, poi con la modellazione 3D durante la preparazione del portfolio. A 18 anni sono stato ammesso all’Accademia di Belle Arti di Roma, dove ho conosciuto sound design, fotografia e generazione di immagini con IA. Sto ancora esplorando."}, "如果绘画是被動的和服從的，我能夠明顯感覺到是一條我会后悔和難過的路，所以在美院報考時选择了其他的專業，比如藝術新技術。": {"en": "If painting means being passive and obedient, I could clearly feel it would be a path I would regret and be sad about — so when applying to the academy I chose other majors, such as New Technologies of Art.", "it": "Se dipingere significa essere passivi e obbedienti, sentivo chiaramente che sarebbe stata una strada di cui mi sarei pentito e rattristato; perciò all’esame d’ammissione ho scelto altri indirizzi, come Nuove Tecnologie dell’Arte."}, "這裏面的作品都是18嵗包括18嵗以内創作的，繼續探索一些更有意思的東西和工具留在blog這裏或者單獨創建平臺，謝謝屏幕前的各位嘻😄。": {"en": "All the works here were made at 18 or younger. Whatever more interesting things and tools I keep exploring will stay here on the blog or get their own platform. Thank you to everyone on the other side of the screen 😄.", "it": "Tutte le opere qui presenti sono state create entro i 18 anni. Le cose e gli strumenti più interessanti che continuerò a esplorare resteranno qui sul blog o avranno una piattaforma a parte. Grazie a tutti voi dall’altra parte dello schermo 😄."}, "个人原创开发 创作及排版工具应用 — Online": {"en": "Original personal project: creative & layout tool apps — Online", "it": "Progetto personale originale: app per creazione e impaginazione — Online"}, "Atelier Mise 米斯 — 过程兼结果创作工作台": {"en": "Atelier Mise — a workbench for both process and result", "it": "Atelier Mise — un banco di lavoro per processo e risultato"}, "作品集": {"en": "Portfolio", "it": "Portfolio"}, "冥想视听空间": {"en": "Meditative audiovisual space", "it": "Spazio audiovisivo meditativo"}, "· Android App 是原生版本，Flutter App 是跨平台框架版当前仅 Android；桌面端推荐 Windows App，Tauri App 体积更小但外部链接暂时打不开(下载时若遇安全提示，点击右侧 ··· \"保留\"可正常安装)": {"en": "· The Android App is the native version; the Flutter App is the cross-platform framework version (Android only for now). On desktop I recommend the Windows App; the Tauri App is smaller, but external links don’t open yet. (If a security warning appears while downloading, click ··· on the right and choose “Keep” to install normally.)", "it": "· L’app Android è la versione nativa; l’app Flutter è la versione con framework multipiattaforma (per ora solo Android). Su desktop consiglio l’app Windows; l’app Tauri è più leggera ma per ora i link esterni non si aprono. (Se durante il download compare un avviso di sicurezza, clicca ··· a destra e scegli «Conserva» per installare normalmente.)"}, "我的 ▶️": {"en": "My ▶️", "it": "Il mio ▶️"}, "YouTube影片頻道": {"en": "YouTube channel", "it": "canale YouTube"}, "Fine Art": {"en": "Fine Art", "it": "Belle arti", "zh": "绘画"}, "绘画 · Ages 13–16": {"en": "Painting · Ages 13–16", "it": "Pittura · 13–16 anni"}, "Graphite · Charcoal · Oil": {"it": "Grafite · Carboncino · Olio", "zh": "石墨 · 炭笔 · 油画"}, "三维建模 · Ages 17–18": {"en": "3D modeling · Ages 17–18", "it": "Modellazione 3D · 17–18 anni"}, "3D · Film · Digital": {"it": "3D · Cinema · Digitale", "zh": "三维 · 影像 · 数字"}, "人工智能生图 · Age 18": {"en": "AI image generation · Age 18", "it": "Immagini con IA · 18 anni"}, "\"keeping a record of the beginning of me.\"": {"it": "«tenere traccia dei miei inizi.»", "zh": "“记录下我的开端。”"}, "— Jin Hangtao · 金航滔 · Aged 13–18": {"it": "— Jin Hangtao · 金航滔 · Dai 13 ai 18 anni", "zh": "— Jin Hangtao · 金航滔 · 13–18 岁"}, "Graphite": {"it": "Grafite", "zh": "石墨"}, "Charcoal": {"it": "Carboncino", "zh": "炭笔"}, "Oil on Canvas": {"it": "Olio su tela", "zh": "布面油画"}, "绘画 · 写生习作 · Ages 13–16": {"en": "Painting · Life studies · Ages 13–16", "it": "Pittura · Studi dal vero · 13–16 anni"}, "Selected Works": {"it": "Opere scelte", "zh": "代表作品"}, "代表作品 · Charcoal · Oil · Graphite": {"en": "Selected works · Charcoal · Oil · Graphite", "it": "Opere scelte · Carboncino · Olio · Grafite"}, "大卫像": {"en": "David Bust", "it": "Busto del David"}, "父母": {"en": "Parents", "it": "Genitori"}, "自画像": {"en": "Self-Portrait", "it": "Autoritratto"}, "女性画像": {"en": "Female Portrait", "it": "Ritratto femminile"}, "画室之窗": {"en": "Studio Window", "it": "Finestra dello studio"}, "仰望": {"en": "Upward Gaze", "it": "Sguardo verso l’alto"}, "大卫像 . 正面": {"en": "David Bust · Front", "it": "Busto del David · frontale"}, "爱奥尼柱头": {"en": "Ionic Capital", "it": "Capitello ionico"}, "衞生間": {"en": "Restroom", "it": "Bagno"}, "韩老师与其女儿": {"en": "Teacher Han and His Daughter", "it": "Il maestro Han e sua figlia"}, "大衣里的孩子": {"en": "Child in a Coat", "it": "Bambino nel cappotto"}, "自画像 · 全身": {"en": "Self-Portrait · Full Body", "it": "Autoritratto · figura intera"}, "女性黑人": {"en": "Black Woman", "it": "Donna nera"}, "男人 · 胸像": {"en": "Male Bust", "it": "Busto maschile"}, "芭蕾舞者": {"en": "Ballet Dancer", "it": "Ballerina"}, "男性侧靠": {"en": "Man Leaning Sideways", "it": "Uomo appoggiato di lato"}, "阿波罗": {"en": "Apollo", "it": "Apollo"}, "达莫克塞诺斯": {"en": "Damoxenos", "it": "Damosseno"}, "男性身像": {"en": "Male Figure", "it": "Figura maschile"}, "女性坐靠": {"en": "Seated Woman Leaning", "it": "Donna seduta appoggiata"}, "男性人像": {"en": "Male Portrait", "it": "Ritratto maschile"}, "习作一览": {"en": "Studies Overview", "it": "Panoramica degli studi"}, "四联写生": {"en": "Four Portrait Studies", "it": "Quattro studi di ritratto"}, "人像习作组": {"en": "Portrait Study Group", "it": "Gruppo di studi di ritratto"}, "综合练习": {"en": "Mixed Exercises", "it": "Esercizi misti"}, "习作组合": {"en": "Study Composite", "it": "Composizione di studi"}, "古希臘": {"en": "Ancient Greece", "it": "Antica Grecia"}, "賽博城市": {"en": "Cyber City", "it": "Città cyberpunk"}, "地下室": {"en": "Basement", "it": "Seminterrato"}, "佛祖": {"en": "Buddha", "it": "Buddha"}, "桌子": {"en": "Table", "it": "Tavolo"}, "极光": {"en": "Aurora", "it": "Aurora"}, "歸途": {"en": "The Way Home", "it": "Il ritorno"}, "城": {"en": "City", "it": "Città"}, "地铁": {"en": "Subway", "it": "Metropolitana"}, "雪夜": {"en": "Snowy Night", "it": "Notte di neve"}, "黑洞": {"en": "Black Hole", "it": "Buco nero"}, "地球": {"en": "Earth", "it": "Terra"}, "作業 01": {"en": "Assignment 01", "it": "Esercizio 01"}, "作业": {"en": "Assignment", "it": "Esercizio"}, "作業": {"en": "Assignment", "it": "Esercizio"}, "产品": {"en": "Product", "it": "Prodotto"}, "产品1": {"en": "Product 1", "it": "Prodotto 1"}, "产品2": {"en": "Product 2", "it": "Prodotto 2"}, "女孩": {"en": "Girl", "it": "Ragazza"}, "卖花车": {"en": "Flower Cart", "it": "Carretto dei fiori"}, "樹": {"en": "Tree", "it": "Albero"}, "列车": {"en": "Train", "it": "Treno"}, "街": {"en": "Street", "it": "Strada"}, "车站": {"en": "Station", "it": "Stazione"}, "洗手": {"en": "Washing Hands", "it": "Lavarsi le mani"}, "牌子": {"en": "Sign", "it": "Cartello"}, "广告牌子": {"en": "Billboard", "it": "Cartellone pubblicitario"}, "雨夜商店": {"en": "Rainy Night Shop", "it": "Negozio nella notte di pioggia"}, "海灘": {"en": "Beach", "it": "Spiaggia"}, "采集": {"en": "Gathering", "it": "Raccolta"}, "漁場": {"en": "Fishing Ground", "it": "Zona di pesca"}, "救援": {"en": "Rescue", "it": "Soccorso"}, "街道": {"en": "Streets", "it": "Strade"}, "城市": {"en": "City", "it": "Città"}, "采集地": {"en": "Gathering Site", "it": "Luogo di raccolta"}, "地鐵": {"en": "Subway", "it": "Metropolitana"}, "森林": {"en": "Forest", "it": "Foresta"}, "日式海報": {"en": "Japanese-Style Poster", "it": "Poster in stile giapponese"}, "日係海報": {"en": "Japanese-Style Poster II", "it": "Poster in stile giapponese II"}, "面具海報": {"en": "Mask Poster", "it": "Poster con maschera"}, "尊貴海報": {"en": "Prestige Poster", "it": "Poster «prestigio»"}, "建筑海报": {"en": "Architecture Poster", "it": "Poster di architettura"}, "建筑海报 01": {"en": "Architecture Poster 01", "it": "Poster di architettura 01"}, "音乐海报 01": {"en": "Music Poster 01", "it": "Poster musicale 01"}, "音乐海报 02": {"en": "Music Poster 02", "it": "Poster musicale 02"}, "音乐海报 03": {"en": "Music Poster 03", "it": "Poster musicale 03"}, "音乐海报 04": {"en": "Music Poster 04", "it": "Poster musicale 04"}, "音乐海报 05": {"en": "Music Poster 05", "it": "Poster musicale 05"}, "音乐海报 06": {"en": "Music Poster 06", "it": "Poster musicale 06"}, "音乐海报 07": {"en": "Music Poster 07", "it": "Poster musicale 07"}, "音乐海报 08": {"en": "Music Poster 08", "it": "Poster musicale 08"}, "音乐海报 09": {"en": "Music Poster 09", "it": "Poster musicale 09"}, "音乐海报 10": {"en": "Music Poster 10", "it": "Poster musicale 10"}, "书籍封面 01": {"en": "Book Cover 01", "it": "Copertina 01"}, "书籍封面 02": {"en": "Book Cover 02", "it": "Copertina 02"}, "书籍封面 03": {"en": "Book Cover 03", "it": "Copertina 03"}, "书籍封面 04": {"en": "Book Cover 04", "it": "Copertina 04"}, "Full-Body Studies": {"it": "Studi di figura intera", "zh": "写生全身"}, "写生全身 · Graphite": {"en": "Full-body life studies · Graphite", "it": "Studi dal vero di figura intera · Grafite"}, "Studies Composite": {"it": "Studi compositi", "zh": "综合习作"}, "综合习作 · Mixed Practice · Various Media · Ages 13–16": {"en": "Composite studies · Mixed practice · Various media · Ages 13–16", "it": "Studi compositi · Esercizi misti · Tecniche varie · 13–16 anni"}, "空间创作 · Ages 17–18 · 18 works": {"en": "Spatial creation · Ages 17–18 · 18 works", "it": "Creazione spaziale · 17–18 anni · 18 opere"}, "Age 18": {"en": "Age 18", "it": "18 anni", "zh": "18 岁"}, "Age 17": {"en": "Age 17", "it": "17 anni", "zh": "17 岁"}, "3D Modeling · Age 18": {"en": "3D Modeling · Age 18", "it": "Modellazione 3D · 18 anni", "zh": "三维建模 · 18 岁"}, "3D Modeling · Age 17": {"en": "3D Modeling · Age 17", "it": "Modellazione 3D · 17 anni", "zh": "三维建模 · 17 岁"}, "摄影 · Age 18 · 9 photographs": {"en": "Photography · Age 18 · 9 photographs", "it": "Fotografia · 18 anni · 9 fotografie"}, "Photography · Age 18": {"en": "Photography · Age 18", "it": "Fotografia · 18 anni", "zh": "摄影 · 18 岁"}, "人工智能生图 · Stable Diffusion · Age 18 · 10 images": {"en": "AI image generation · Stable Diffusion · Age 18 · 10 images", "it": "Immagini con IA · Stable Diffusion · 18 anni · 10 immagini"}, "ComfyUI · Stable Diffusion · Age 18": {"en": "ComfyUI · Stable Diffusion · Age 18", "it": "ComfyUI · Stable Diffusion · 18 anni", "zh": "ComfyUI · Stable Diffusion · 18 岁"}, "声音设计 · Reaper · Age 18": {"en": "Sound design · Reaper · Age 18", "it": "Sound design · Reaper · 18 anni"}, "Reaper · Sound Design": {"en": "Reaper · Sound Design", "it": "Reaper · Sound design", "zh": "Reaper · 声音设计"}, "40多亿年的故事": {"en": "A Story of Over 4 Billion Years", "it": "Una storia di oltre 4 miliardi di anni"}, "这个音频作品3分10秒压缩了40多亿年的地球初期历史，用声音讲地球从一开始到多细胞生命出现的故事。 前面是地球刚形成时的混乱和喷发的岩浆，用尖锐的声音表现；然后慢慢听到水流声和气泡声， 像单细胞生命慢慢冒出来；最后多细胞生命登场，从海洋生物、鸟类、爬行动物，到人类，低沉的声音让这一切听起来很史诗，很有感觉。": {"en": "In 3 minutes and 10 seconds, this audio piece compresses more than 4 billion years of early Earth history, telling through sound the story from the very beginning of the planet to the emergence of multicellular life. The opening is the chaos of the newly formed Earth and erupting magma, rendered with sharp sounds; then you slowly hear flowing water and bubbles, like single-celled life gradually surfacing; finally multicellular life arrives — sea creatures, birds, reptiles and humans — and the low, deep sounds make it all feel epic.", "it": "In 3 minuti e 10 secondi, questo brano audio comprime oltre 4 miliardi di anni di storia della Terra primordiale, raccontando con il suono il percorso dagli inizi del pianeta alla comparsa della vita pluricellulare. L’inizio è il caos della Terra appena formata e del magma in eruzione, reso con suoni acuti; poi si sentono lentamente acqua che scorre e bolle, come la vita unicellulare che affiora; infine arriva la vita pluricellulare — creature marine, uccelli, rettili e gli esseri umani — e i suoni bassi e profondi rendono tutto epico."}, "Speed": {"en": "Speed", "it": "Velocità", "zh": "速度"}, "平面设计 · 海报 · 书籍封面 · Age 17–18": {"en": "Graphic design · Posters · Book covers · Age 17–18", "it": "Grafica · Poster · Copertine di libri · 17–18 anni"}, "Poster Design": {"it": "Design di poster", "zh": "海报设计"}, "海报设计": {"en": "Poster Design", "it": "Design di poster"}, "Poster Design · Photoshop": {"it": "Design di poster · Photoshop", "zh": "海报设计 · Photoshop"}, "Poster Design · Illustrator": {"it": "Design di poster · Illustrator", "zh": "海报设计 · Illustrator"}, "Folded Posters": {"it": "Poster piegati", "zh": "折叠海报"}, "折叠海报设计": {"en": "Folded Poster Design", "it": "Design di poster piegati"}, "Book Cover Design": {"it": "Design di copertine", "zh": "书籍封面设计"}, "书籍封面设计": {"en": "Book Cover Design", "it": "Design di copertine di libri"}, "Book Cover Design · Photoshop": {"it": "Design di copertine · Photoshop", "zh": "书籍封面设计 · Photoshop"}, "互动影像 · Digital Video · Accademia di Belle Arti di Roma": {"en": "Interactive video · Digital Video · Accademia di Belle Arti di Roma", "it": "Video interattivo · Video digitale · Accademia di Belle Arti di Roma"}, "Interactive Video": {"it": "Video interattivo", "zh": "互动影像"}, "— READ MORE": {"it": "— LEGGI DI PIÙ", "zh": "— 阅读更多"}, "部落格": {"en": "Blog", "it": "Blog"}, "日常 · Writing · 金航滔": {"en": "Daily life · Writing · Jin Hangtao", "it": "Vita quotidiana · Scrittura · Jin Hangtao"}, "Thank You, 13–16.": {"it": "Grazie, 13–16.", "zh": "谢谢你，13–16。"}, "You": {"it": "Mi", "zh": "你"}, "Shaped": {"it": "hai", "zh": "塑造了"}, "Me.": {"it": "plasmato.", "zh": "我。"}, "Now, Reborn at 16,": {"it": "Ora, rinato a 16 anni,", "zh": "如今，16 岁重生，"}, "a New Life Begins.": {"it": "inizia una nuova vita.", "zh": "新的生活开始了。"}, "直到16岁以后，": {"en": "Only after I turned 16,", "it": "Solo dopo i 16 anni,"}, "我为人生更换了存在方式。": {"en": "did I change the way I exist in life.", "it": "ho cambiato il mio modo di esistere nella vita."}, "新生也从此开始。": {"en": "And a new life began from then on.", "it": "E da allora è iniziata una nuova vita."}, "截图后发送给微信好友": {"en": "Take a screenshot and send it to a WeChat friend", "it": "Fai uno screenshot e invialo a un amico su WeChat"}, "发送": {"en": "Send", "it": "Invia"}};
+  var H2={"About <i>Me</i>": {"it": "Su <i>di me</i>", "zh": "关于<i>我</i>"}, "Fine Art <i>Gallery</i>": {"it": "Galleria <i>d’arte</i>", "zh": "绘画<i>画廊</i>"}, "3D <i>Modeling</i>": {"it": "Modellazione <i>3D</i>", "zh": "三维<i>建模</i>"}, "<i>Photography</i>": {"it": "<i>Fotografia</i>", "zh": "<i>摄影</i>"}, "AI · <i>ComfyUI</i>": {"it": "IA · <i>ComfyUI</i>", "zh": "人工智能 · <i>ComfyUI</i>"}, "Sound <i>Design</i>": {"it": "Sound <i>design</i>", "zh": "声音<i>设计</i>"}, "Graphic <i>Design</i>": {"it": "Design <i>grafico</i>", "zh": "平面<i>设计</i>"}, "<i>Video</i>": {"it": "<i>Video</i>", "zh": "<i>视频</i>"}, "<i>Blog</i>": {"it": "<i>Blog</i>", "zh": "<i>博客</i>"}};
+  var LANGS=[
+    {id:'orig',label:'LANG',name:'Original',code:'原版'},
+    {id:'zh',label:'ZH',name:'中文',code:'ZH'},
+    {id:'en',label:'EN',name:'English',code:'EN'},
+    {id:'it',label:'IT',name:'Italiano',code:'IT'}
+  ];
+  var HTMLLANG={orig:'zh',zh:'zh',en:'en',it:'it'};
+  var orig=new WeakMap(), cur='orig', menu=null, openBtn=null;
+
+  function norm(s){return s.replace(/\s+/g,' ').trim();}
+
+  function apply(lang,anim){
+    var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      var p=n.parentNode; if(!p) return NodeFilter.FILTER_REJECT;
+      var t=p.nodeName; if(t==='SCRIPT'||t==='STYLE'||t==='NOSCRIPT') return NodeFilter.FILTER_REJECT;
+      if(p.closest && p.closest('.ph-t,.lang-btn,.lang-menu')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }});
+    var n, list=[]; while((n=w.nextNode())) list.push(n);
+    var changes=[], els=[];
+    list.forEach(function(n){
+      var o=orig.has(n)?orig.get(n):n.nodeValue;
+      var e=DICT[norm(o)]; if(!e) return;
+      if(!orig.has(n)) orig.set(n,o);
+      var v=(lang==='orig')?null:e[lang];
+      var nv=(v==null)?o:o.match(/^\s*/)[0]+v+o.match(/\s*$/)[0];
+      if(n.nodeValue!==nv){ changes.push({el:n.parentNode,fn:function(){ n.nodeValue=nv; }}); if(els.indexOf(n.parentNode)<0) els.push(n.parentNode); }
+    });
+    document.querySelectorAll('.ph-t').forEach(function(h){
+      if(h.dataset.i18nOrig===undefined) h.dataset.i18nOrig=h.innerHTML;
+      var e=H2[h.dataset.i18nOrig], v=(lang==='orig'||!e)?null:e[lang];
+      var nv=(v==null)?h.dataset.i18nOrig:v;
+      if(h.innerHTML!==nv){ changes.push({el:h,fn:function(){ h.innerHTML=nv; }}); if(els.indexOf(h)<0) els.push(h); }
+    });
+    var seq=(apply._seq=(apply._seq||0)+1);
+    function runFor(el){ changes.forEach(function(c){ if(c.el===el) c.fn(); }); }
+    function commitAll(){ changes.forEach(function(c){ c.fn(); }); }
+    function realign(){ try{ if(typeof moveIndicator==='function') moveIndicator(document.querySelector('.tab.on')); }catch(e){} }
+    document.documentElement.lang=HTMLLANG[lang]||'zh';
+
+    /* 过渡动画（三层叠加）
+       ① 文字：每块「淡出+虚化」→ 统一换字 → 「由虚到实+轻微浮起」，自上而下错开成波浪
+       ② 版面：换字后行数变化导致的位移用 FLIP 处理——先记下每个元素换字前的位置，换完字后
+          让它们从旧位置顺滑滑向新位置；带底色/边框的卡片高度也从旧高度渐变到新高度
+       ③ 顶部 tab 栏整体参与，指示条同步对齐
+       起止透明度/滤镜取元素自身当前值，半透明小字不会再跳变 */
+    var reduce=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(!anim || reduce || !Element.prototype.animate){ commitAll(); realign(); return; }
+
+    var OUT_D=300, OUT_E='cubic-bezier(.4,0,.7,1)', FD=900, FE='cubic-bezier(.16,1,.3,1)';
+    var vh=window.innerHeight;
+    var roots=[document.querySelector('.topbar'),document.querySelector('.sb'),document.querySelector('.mob-profile'),document.querySelector('.panel.on')];
+
+    /* 记录一批元素的位置与尺寸（视口附近、深度有限、数量有上限） */
+    function snapshot(){
+      var m=new Map(), count=0, lo=-vh*0.6, hi=vh*1.6;
+      function walk(el,depth){
+        if(count>1800) return;
+        if(el.classList && (el.classList.contains('lang-btn')||el.classList.contains('lang-menu'))) return;  /* 语言按钮自己负责收缩，不参与版面位移动画，否则文字更新会让它内部抖一下 */
+        var r=el.getBoundingClientRect();
+        if(r.width===0 && r.height===0) return;
+        if(r.bottom<lo || r.top>hi) return;
+        m.set(el,{x:r.left,y:r.top,w:r.width,h:r.height}); count++;
+        var tg=el.nodeName.toLowerCase();
+        if(depth>=9||tg==='svg'||tg==='canvas'||tg==='img'||tg==='video'||tg==='iframe') return;
+        for(var c=el.firstElementChild;c;c=c.nextElementSibling) walk(c,depth+1);
+      }
+      roots.forEach(function(r){ if(r) walk(r,0); });
+      return m;
+    }
+    function boxy(cs){
+      var bg=cs.backgroundColor;
+      if(bg && bg!=='transparent' && bg!=='rgba(0, 0, 0, 0)') return true;
+      if(cs.backgroundImage && cs.backgroundImage!=='none') return true;
+      if(parseFloat(cs.borderTopWidth)>0 || parseFloat(cs.borderBottomWidth)>0) return true;
+      return !!(cs.boxShadow && cs.boxShadow!=='none');
+    }
+
+    /* 参与淡入淡出的元素：全部 tab + 视口内文字有变化的块 */
+    var tabEls=[].slice.call(document.querySelectorAll('.topbar .tab'));
+    var fades=[], vis=[];
+    tabEls.forEach(function(el,i){ fades.push({el:el,dOut:i*18,dIn:i*18}); });
+    /* 左侧栏竖排导航（横屏电脑/平板）：同样整体参与，即使文字没变也一起淡出淡入，自上而下错开 */
+    var sbEls=[].slice.call(document.querySelectorAll('.sb-link .sb-link-txt')).filter(function(el){
+      var r=el.getBoundingClientRect(); return r.width>0 && r.bottom>0 && r.top<vh;
+    });
+    sbEls.forEach(function(el,i){ fades.push({el:el,dOut:30+i*24,dIn:30+i*24}); });
+    els.forEach(function(el){
+      if(tabEls.indexOf(el)>=0 || sbEls.indexOf(el)>=0) return;
+      var r=el.getBoundingClientRect();
+      if(r.bottom>0 && r.top<vh && r.width>0) vis.push({el:el,top:r.top});
+    });
+    vis.sort(function(a,b){return a.top-b.top;});
+    vis.forEach(function(x,i){
+      var d=Math.min(i*26,260)+Math.max(0,Math.min(1,x.top/vh))*100;
+      fades.push({el:x.el,dOut:d,dIn:d*0.6});
+    });
+
+    var sy0=window.scrollY, sx0=window.scrollX;
+    var before=snapshot();                                   /* 换字前的位置 */
+    fades.forEach(function(f){
+      var cs=getComputedStyle(f.el); f.op=parseFloat(cs.opacity); if(isNaN(f.op)) f.op=1;
+      f.fl=(cs.filter&&cs.filter!=='none')?cs.filter+' ':'';
+    });
+
+    var pending=fades.length, outs=[];
+    function finishAll(){
+      outs.forEach(function(o){ o.cancel(); });
+      if(seq!==apply._seq) return;                           /* 期间又切换了语言：交给新的那一次 */
+      commitAll(); realign();                                /* 一次性换字，指示条同步对齐 */
+
+      var after=(window.scrollY===sy0 && window.scrollX===sx0)?snapshot():null;
+      var rel=new Map(), tot=new Map();
+      if(after){
+        after.forEach(function(a,el){
+          var b=before.get(el); if(!b) return;
+          var cs=getComputedStyle(el);
+          if(cs.display==='inline') return;                  /* translate 对行内元素无效，位移由其块级祖先带着走 */
+          var T={x:b.x-a.x,y:b.y-a.y}, P=null, anc=el.parentElement;
+          while(anc){ if(tot.has(anc)){ P=tot.get(anc); break; } anc=anc.parentElement; }
+          tot.set(el,T);
+          rel.set(el,{x:T.x-(P?P.x:0), y:T.y-(P?P.y:0), oh:b.h, nh:a.h, cs:cs});
+        });
+      }
+      var fadeSet=new Map(); fades.forEach(function(f){ fadeSet.set(f.el,f); });
+
+      /* 文字块：淡入 + 从旧位置滑过来 */
+      fades.forEach(function(f){
+        var r=rel.get(f.el), rx=(r&&Math.abs(r.x)>0.5)?r.x:0, ry=(r&&Math.abs(r.y)>0.5)?r.y:0;
+        f.el.animate([
+          {opacity:0,filter:f.fl+'blur(7px)',translate:rx+'px '+(ry+8)+'px'},
+          {opacity:f.op,filter:f.fl+'blur(0px)',translate:'0px 0px'}
+        ],{duration:FD,delay:f.dIn,easing:FE,fill:'backwards'});
+      });
+      /* 其余元素：位置平滑过渡；卡片类的高度渐变 */
+      rel.forEach(function(r,el){
+        if(fadeSet.has(el)) return;
+        if(Math.abs(r.x)>0.5 || Math.abs(r.y)>0.5){
+          el.animate([{translate:r.x+'px '+r.y+'px'},{translate:'0px 0px'}],{duration:FD,easing:FE});
+        }
+        if(Math.abs(r.oh-r.nh)>1 && r.cs.position!=='absolute' && r.cs.position!=='fixed' && boxy(r.cs)){
+          var pad=0;
+          if(r.cs.boxSizing==='content-box'){
+            pad=parseFloat(r.cs.paddingTop)+parseFloat(r.cs.paddingBottom)+parseFloat(r.cs.borderTopWidth)+parseFloat(r.cs.borderBottomWidth);
+          }
+          el.animate([{height:Math.max(0,r.oh-pad)+'px'},{height:Math.max(0,r.nh-pad)+'px'}],{duration:FD,easing:FE});
+        }
+      });
+    }
+
+    fades.forEach(function(f){
+      var out=f.el.animate([
+        {opacity:f.op,filter:f.fl+'blur(0px)',translate:'0px 0px'},
+        {opacity:0,filter:f.fl+'blur(5px)',translate:'0px -5px'}
+      ],{duration:OUT_D,delay:f.dOut,easing:OUT_E,fill:'both'});
+      outs.push(out);
+      out.onfinish=function(){ if(--pending===0) finishAll(); };
+    });
+  }
+
+  function labelFor(id){ for(var i=0;i<LANGS.length;i++) if(LANGS[i].id===id) return LANGS[i].label; return 'LANG'; }
+
+  function setLang(id,save){
+    cur=id; apply(id,save);
+    document.querySelectorAll('.lang-btn .lang-cur').forEach(function(el){
+      el.textContent=labelFor(id);
+      if(save && el.animate) el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:480,easing:'cubic-bezier(.32,.72,0,1)'});
+    });
+    if(menu) menu.querySelectorAll('.lang-opt').forEach(function(b){b.classList.toggle('on',b.dataset.lang===id);});
+    if(save){ try{localStorage.setItem('jh-lang',id);}catch(e){} }
+  }
+
+  var ROW=40, SEP=0, PAD=6, openL=0, openT=0, items=[], lens=null, head=null, list=null, headCur=null, hot=0, locked=false, closeT=0, startTop=0;
+  var TICK='<i class="lang-dot" aria-hidden="true"></i>';
+  function yOf(i){ return i*ROW+(i>0?SEP:0); }
+  function selIdx(){ for(var i=0;i<LANGS.length;i++) if(LANGS[i].id===cur) return i; return 0; }
+  function geo(l,t,w,h){ menu.style.left=l+'px'; menu.style.top=t+'px'; menu.style.width=w+'px'; menu.style.height=h+'px'; }
+
+  function setHot(i){
+    hot=i; lens.style.setProperty('--y',yOf(i)+'px');
+    items.forEach(function(b,k){b.classList.toggle('hot',k===i);});
+  }
+
+  var closingBtn=null;
+  function finishClose(){
+    clearTimeout(closeT);
+    if(menu) menu.classList.remove('show');
+    var b=closingBtn; closingBtn=null;
+    if(!b) return;
+    b.style.transition='none';                       /* 底色/发丝瞬间还给按钮，不做过渡，否则会闪一下 */
+    b.classList.remove('is-hold','is-closing','is-open');
+    void b.offsetWidth; b.style.transition='';
+  }
+
+  function closeMenu(){
+    if(!menu||!openBtn) return;
+    var btn=openBtn; openBtn=null; locked=false;
+    btn.classList.add('is-closing');
+    btn.classList.remove('is-open');                 /* 真按钮的图标和文字原地淡入（带延迟），不再有克隆可换 */
+    btn.setAttribute('aria-expanded','false');
+    var r=btn.getBoundingClientRect();               /* 按钮文字已更新，收回到它的新尺寸 */
+    menu.classList.remove('hov','open'); geo(r.left,r.top,r.width,r.height);
+    closingBtn=btn;
+    clearTimeout(closeT);
+    closeT=setTimeout(finishClose,460);
+  }
+
+  function choose(i){
+    if(locked) return; locked=true;
+    var l=LANGS[i];
+    if(l.id===cur){ closeMenu(); return; }
+    setHot(i);
+    items.forEach(function(b,k){b.classList.toggle('on',k===i);});
+    lens.animate([{transform:'translateY('+yOf(i)+'px) scale(.97)'},{transform:'translateY('+yOf(i)+'px) scale(1)'}],{duration:300,easing:'cubic-bezier(.3,1.35,.5,1)'});
+    setTimeout(function(){ setLang(l.id,true); },60);
+    setTimeout(closeMenu,360);
+  }
+
+  function buildMenu(){
+    menu=document.createElement('div'); menu.className='lang-menu'; menu.setAttribute('role','menu');
+    menu.innerHTML='<div class="lang-head"></div><div class="lang-list"><div class="lang-opts"><span class="lang-lens"></span></div></div>';
+    head=menu.firstChild; list=menu.lastChild;
+    var box=list.lastChild; lens=box.firstChild;
+    LANGS.forEach(function(l,i){
+      if(i===1){ var sp=document.createElement('div'); sp.className='lang-sep'; box.appendChild(sp); }
+      var b=document.createElement('button'); b.type='button'; b.className='lang-opt'; b.dataset.lang=l.id;
+      b.setAttribute('role','menuitemradio'); b.style.setProperty('--o',(.1+i*.03)+'s');
+      b.innerHTML=TICK+'<span>'+l.name+'</span><span class="lang-code">'+l.code+'</span>';
+      b.addEventListener('mouseenter',function(){ if(menu.classList.contains('open')) setHot(i); });
+      b.addEventListener('click',function(ev){ ev.stopPropagation(); choose(i); });
+      box.appendChild(b); items.push(b);
+    });
+    box.addEventListener('mouseleave',function(){ setHot(selIdx()); });
+    menu.addEventListener('click',function(e){ e.stopPropagation(); });
+    menu.addEventListener('keydown',function(e){
+      var n=items.length, k=e.key;
+      if(k==='ArrowDown'||k==='ArrowUp'||k==='Home'||k==='End'){
+        e.preventDefault();
+        var j=k==='Home'?0:k==='End'?n-1:(hot+(k==='ArrowDown'?1:-1)+n)%n;
+        setHot(j); items[j].focus({preventScroll:true});
+      } else if(k==='Escape'){ e.stopPropagation(); var b=openBtn; closeMenu(); if(b) b.focus(); }
+      else if(k==='Tab'){ closeMenu(); }
+    });
+    document.body.appendChild(menu);
+  }
+
+  function openMenu(btn){
+    if(!menu) buildMenu();
+    finishClose(); locked=false;
+    var r=btn.getBoundingClientRect();
+    menu.dataset.src=btn.classList.contains('mob-badge')?'mob':'sb';
+    /* 按钮此刻若处于悬停态，面板起点也带悬停发丝，接管按钮的底色时才一致 */
+    var isHov=false; try{ isHov=btn.matches(':hover'); }catch(e){}
+    menu.classList.toggle('hov', isHov); menu.classList.remove('picked');
+    var si=selIdx();
+    items.forEach(function(b,k){b.classList.toggle('on',k===si);});
+    menu.classList.add('nomove','show'); menu.classList.remove('open');
+    geo(r.left,r.top,r.width,r.height);
+    setHot(si);
+    void menu.offsetWidth;                         /* 先固定"与按钮完全重合"的起点 */
+    menu.classList.remove('nomove');
+    btn.classList.remove('is-closing'); btn.classList.add('is-open');
+    var W=168, H=PAD*2+LANGS.length*ROW+SEP;
+    var alignLeft=(r.left+r.width/2)<window.innerWidth/2;
+    var left=Math.round(Math.max(8,Math.min(alignLeft?r.left-14:r.right-W+14,window.innerWidth-W-8)));
+    var top=Math.round(Math.max(8,Math.min(r.bottom-(btn.classList.contains('mob-lang')?0:6),window.innerHeight-H-8)));
+    menu.classList.add('open'); geo(left,top,W,H); openL=left; openT=top;
+    btn.setAttribute('aria-expanded','true'); openBtn=btn; startTop=r.top;
+    items[si].focus({preventScroll:true});
+  }
+
+  document.querySelectorAll('.lang-btn').forEach(function(btn){
+    btn.addEventListener('pointermove',function(e){ var br=btn.getBoundingClientRect(); btn.style.setProperty('--mx',(e.clientX-br.left).toFixed(1)+'px'); btn.style.setProperty('--my',(e.clientY-br.top).toFixed(1)+'px'); if(btn.classList.contains('quiet') && !btn.classList.contains('is-open')) btn.classList.remove('quiet'); });
+    btn.addEventListener('pointerleave',function(){ btn.classList.remove('quiet'); });
+    btn.addEventListener('click',function(ev){
+      ev.stopPropagation(); ev.preventDefault();   /* don't toggle the mobile profile card */
+      if(openBtn===btn){closeMenu();} else {closeMenu(); openMenu(btn);}
+    });
+  });
+  document.addEventListener('click',closeMenu);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu();});
+  window.addEventListener('resize',closeMenu);
+  window.addEventListener('scroll',function(){
+    if(!openBtn) return;
+    if(Math.abs(openBtn.getBoundingClientRect().top-startTop)>4) closeMenu();
+  },true);
+
+  var saved='orig'; try{saved=localStorage.getItem('jh-lang')||'orig';}catch(e){}
+  if(saved!=='orig') setLang(saved,false);
+  window.JHLang={set:function(id){setLang(id,true);},refresh:function(){apply(cur);}};
+})();
 </script>
 </body>
 </html>
