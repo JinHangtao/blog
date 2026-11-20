@@ -5905,10 +5905,10 @@ function doCopy(btn){
   var url = location.origin + location.pathname + currentHash;
   var txtEl = btn ? btn.querySelector('.art-copy-txt') : null;
   function done(){
-    if(txtEl){ txtEl.textContent = 'Copied ✓'; }
+    if(txtEl){ txtEl.textContent = (window.JHLang && JHLang.ui) ? JHLang.ui('Copied') : 'Copied ✓'; }
     if(btn){ btn.classList.add('copied'); }
     setTimeout(function(){
-      if(txtEl) txtEl.textContent = 'Copy Link';
+      if(txtEl) txtEl.textContent = (window.JHLang && JHLang.ui) ? JHLang.ui('Copy Link') : 'Copy Link';
       if(btn){ btn.classList.remove('copied'); }
     }, 2000);
   }
@@ -5957,10 +5957,15 @@ function doCopy(btn){
     if(target) openArticle(target.id);
   };
 
+  // ── 多语言：按当前语言取文章标题/正文与界面文字（未选语言时原样返回）──
+  function T(a){ return (window.JHLang && JHLang.article) ? JHLang.article(a) : a; }
+  function U(k){ return (window.JHLang && JHLang.ui) ? JHLang.ui(k) : k; }
+
   // ── 渲染博客列表 ──
   function renderList(list){
     var wrap = document.getElementById('blog-list-container');
     if(!wrap) return;
+    list = list.map(function(a){ return T(a); });
     wrap.innerHTML = '';
 
     list.forEach(function(a){
@@ -6006,15 +6011,15 @@ function doCopy(btn){
         (coverSrc && coverType === 'img' ? '<div class="blog-cover-wrap"><img class="blog-cover-img" src="' + coverSrc + '" loading="lazy" decoding="async" alt=""></div>' : '') +
         (coverSrc && coverType === 'video' ? '<div class="blog-cover-video-preview" style="margin-top:16px;display:flex;justify-content:center;"><video src="' + coverSrc + '" controls playsinline preload="metadata"' + (coverPoster ? ' poster="' + coverPoster + '"' : '') + ' style="max-width:260px;width:100%;height:auto;display:block;border-radius:12px;"></video></div>' : '') +
         '<div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="blog-open-btn" data-id="' + a.id + '">' +
-          '<span class="btn-text">Read Full Post</span>' +
+          '<span class="btn-text">' + U('Read Full Post') + '</span>' +
           '<span class="btn-arrow"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
         '</button></div>' +
         '<div style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">' +
           '<div id="cl-' + a.commentId + '" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>' +
           '<div class="comment-row" style="display:flex;gap:8px">' +
-            '<input id="cn-' + a.commentId + '" placeholder="留下大名" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
-            '<input id="cm-' + a.commentId + '" placeholder="說點什麽..." style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
-            '<button class="comment-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:\'Jost\',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>' +
+            '<input id="cn-' + a.commentId + '" placeholder="' + U('placeholderName') + '" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
+            '<input id="cm-' + a.commentId + '" placeholder="' + U('placeholderMsg') + '" style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
+            '<button class="comment-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:\'Jost\',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">' + U('Send') + '</button>' +
           '</div>' +
         '</div>';
 
@@ -6129,7 +6134,7 @@ function doCopy(btn){
 
   // ── 构建文章 HTML ──
   function buildContent(id){
-    var d = ARTICLES[id];
+    var d = T(ARTICLES[id]);
     if(!d) return;
     currentId = id;
 
@@ -6153,8 +6158,8 @@ function doCopy(btn){
     if(curIdx !== -1 && curIdx < LIST.length - 1){
       var nxt = LIST[curIdx + 1];
       nextHtml = '<div class="art-next art-reveal" data-next="' + nxt.id + '">' +
-        '<div><div class="art-next-label">Next Post</div>' +
-        '<div class="art-next-title">' + nxt.title.replace(/<[^>]+>/g,'') + '</div></div>' +
+        '<div><div class="art-next-label">' + U('Next Post') + '</div>' +
+        '<div class="art-next-title">' + T(nxt).title.replace(/<[^>]+>/g,'') + '</div></div>' +
         '<span class="art-next-arr">→</span>' +
         '</div>';
     }
@@ -6164,7 +6169,7 @@ function doCopy(btn){
     if(hasComments){
       commentHtml =
         '<div class="art-comments art-reveal" id="art-comments-' + d.commentId + '">' +
-          '<div class="art-comments-hd">Comments \u00b7 留言</div>' +
+          '<div class="art-comments-hd">' + U('Comments') + '</div>' +
           '<div id="art-cl-' + d.commentId + '" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>' +
         '</div>';
     }
@@ -6180,10 +6185,10 @@ function doCopy(btn){
       '<div class="art-rule"></div>' +
       body +
       '<div class="art-share art-reveal">' +
-        '<span class="art-share-label">Share</span>' +
+        '<span class="art-share-label">' + U('Share') + '</span>' +
         '<button class="art-share-btn primary art-copy-btn">' +
           '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M6 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-2M6 2v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2M6 2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-          '<span class="art-copy-txt">Copy Link</span>' +
+          '<span class="art-copy-txt">' + U('Copy Link') + '</span>' +
         '</button>' +
         '<button class="art-like-btn" data-post="' + d.id + '">' +
           '<span class="art-like-heart">♡</span>' +
@@ -6377,6 +6382,28 @@ function doCopy(btn){
       checkAutoExpandComment();
     }, 370);
   };
+
+  // ── 切换语言时由 JHLang 调用：重绘博客列表；文章正打开则就地重绘并保持滚动位置/输入内容 ──
+  window.JHArticles = { relang: function(){
+    if(!loaded) return;
+    renderList(LIST);
+    var ni = document.getElementById('artCommentName'),
+        mi = document.getElementById('artCommentMsg'),
+        sb = document.getElementById('artCommentSend');
+    if(ni) ni.placeholder = U('placeholderName');
+    if(mi) mi.placeholder = U('placeholderMsg');
+    if(sb) sb.textContent = U('Send');
+    if(currentId && overlay.classList.contains('art-on')){
+      var st = artScroll.scrollTop, nv = ni ? ni.value : '', mv = mi ? mi.value : '';
+      buildContent(currentId);
+      artContent.querySelectorAll('.art-reveal').forEach(function(el){ el.classList.add('in'); });
+      artScroll.scrollTop = st;
+      if(ni) ni.value = nv;
+      if(mi) mi.value = mv;
+      checkAutoExpandComment();
+      artScroll.dispatchEvent(new Event('scroll'));
+    }
+  }};
 
   // ── 关闭 ──
   window.closeArticle = function(){
@@ -7399,6 +7426,7 @@ document.addEventListener('click',function(e){
 
   function setLang(id,save){
     cur=id; apply(id,save); refreshLb(save);
+    if(window.JHArticles) setTimeout(function(){ window.JHArticles.relang(); }, save?320:0);
     document.querySelectorAll('.lang-btn .lang-cur').forEach(function(el){
       el.textContent=labelFor(id);
       if(save && el.animate) el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:480,easing:'cubic-bezier(.32,.72,0,1)'});
@@ -7522,9 +7550,32 @@ document.addEventListener('click',function(e){
     if(Math.abs(openBtn.getBoundingClientRect().top-startTop)>4) closeMenu();
   },true);
 
+  /* 文章页界面文字（orig = 原版显示；缺某语言时回退 orig） */
+  var ART_UI={
+    'Read Full Post':{orig:'Read Full Post',zh:'阅读全文',it:'Leggi tutto'},
+    'Next Post':{orig:'Next Post',zh:'下一篇',it:'Articolo successivo'},
+    'Comments':{orig:'Comments \u00b7 留言',en:'Comments',zh:'留言',it:'Commenti'},
+    'Share':{orig:'Share',zh:'分享',it:'Condividi'},
+    'Copy Link':{orig:'Copy Link',zh:'复制链接',it:'Copia link'},
+    'Copied':{orig:'Copied \u2713',zh:'已复制 \u2713',it:'Copiato \u2713'},
+    'placeholderName':{orig:'留下大名',zh:'留下大名',en:'Your name',it:'Il tuo nome'},
+    'placeholderMsg':{orig:'說點什麽...',zh:'说点什么...',en:'Say something...',it:'Scrivi qualcosa...'},
+    'Send':{orig:'发送',zh:'发送',en:'Send',it:'Invia'}
+  };
   var saved='orig'; try{saved=localStorage.getItem('jh-lang')||'orig';}catch(e){}
   if(saved!=='orig') setLang(saved,false);
-  window.JHLang={set:function(id){setLang(id,true);},refresh:function(){apply(cur);},
+  window.JHLang={set:function(id){setLang(id,true);},
+    cur:function(){return cur;},
+    ui:function(k){ var e=ART_UI[k]; if(!e) return k; var v=(cur==='orig')?null:e[cur]; return v!=null?v:(e.orig!=null?e.orig:k); },
+    article:function(a){
+      if(!a||cur==='orig') return a;
+      var t=a.i18n&&a.i18n[cur]; if(!t) return a;
+      var o={}; for(var k in a) o[k]=a[k];
+      if(t.title) o.title=t.title;
+      if(t.subtitle!=null) o.subtitle=t.subtitle;
+      if(t.body) o.body=a.body.map(function(s,i){ var v=t.body[i]; return v==null?s:v; });
+      return o;
+    },refresh:function(){apply(cur);},
     work:function(d,idx){
       if(!d || cur==='orig') return d;
       var o={title:d.title,en:d.en,desc:d.desc};
