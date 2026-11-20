@@ -21,7 +21,49 @@
       "有Online和Offline。在线版：<a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">atelier-mise.vercel.app</a>",
       "<img src=\"images/my app01.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">",
       "五个月，我想完成。这是给自己20岁生日礼物了。"
-    ]
+    ],
+    "i18n": {
+      "en": {
+        "title": "<em>5</em> Months Solo: I Built a New Kind of Canvas Editor",
+        "body": [
+          "It has been exactly five months since I first conceived this. I don't know how many times I almost quit along the way, but every time I came back I tore down what I had built and rewrote it from scratch. It's hard to call the process “fun”; it felt closer to pain.",
+          "The app is called <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Atelier Mise</a>, a standalone canvas editor. You think freely on a boundless canvas, then export the result directly.",
+          null,
+          "<section-break>Every core feature is built in-house to keep the structure under control</section-break>",
+          "Many bugs took days to track down, only for me to find I had dug the hole myself two weeks earlier — for example, on some Macs the zoom position came out inconsistent. Some features went through three or four design versions, and in the end I used the earliest, simplest one. Sitting there staring at the screen, you really do start to wonder why you set out to do this in the first place.",
+          null,
+          "But I couldn't stop. I couldn't find a tool I truly wanted to use — one where the thinking process and the final result live in the same place, with no shuffling back and forth. Building it myself was one way forward.",
+          null,
+          "<section-break>How it looks now</section-break>",
+          "Free canvas, free movement across pages, connector lines, image editing, and layout export that captures only the page content as HTML, PPT or Word.",
+          "There are Online and Offline versions. Online version: <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">atelier-mise.vercel.app</a>",
+          null,
+          "Five months in, I wanted to see it finished. It's my 20th-birthday present to myself."
+        ]
+      },
+      "it": {
+        "title": "<em>5</em> mesi da solo: ho creato un nuovo tipo di editor a tela",
+        "subtitle": "Sviluppo · Design · Strumenti",
+        "body": [
+          "Sono passati esattamente cinque mesi da quando ho avuto l'idea. Non so quante volte ho mollato lungo la strada, ma ogni volta che tornavo buttavo via quello che avevo fatto e ricominciavo da capo. È difficile definire questo percorso «divertente»; assomigliava di più a una sofferenza.",
+          "L'app si chiama <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Atelier Mise</a>, un editor a tela indipendente. Su una tela senza confini si pensa liberamente, poi si esporta direttamente il risultato.",
+          null,
+          "<section-break>Tutte le funzioni principali sono sviluppate internamente per mantenere il controllo della struttura</section-break>",
+          "Molti bug mi hanno portato via giorni, e alla fine scoprivo di essermi scavato la buca da solo due settimane prima — per esempio, su alcuni Mac la posizione dello zoom risultava incoerente. Alcune funzioni hanno avuto tre o quattro versioni di progetto, e alla fine ho usato la prima, la più semplice. Seduto lì a fissare lo schermo, ti viene davvero da chiederti perché hai iniziato.",
+          null,
+          "Ma non riuscivo a fermarmi. Non trovavo uno strumento che volessi davvero usare — uno in cui il processo di pensiero e il risultato finale stessero nello stesso posto, senza andare avanti e indietro. Costruirmelo da solo era una strada.",
+          null,
+          "<section-break>Com'è adesso</section-break>",
+          "Tela libera, navigazione libera tra le pagine, collegamenti con linee, modifica delle immagini ed esportazione dell'impaginato, che cattura solo il contenuto della pagina in HTML, PPT o Word.",
+          "Ci sono la versione Online e quella Offline. Versione online: <a href=\"https://atelier-mise.vercel.app/en\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">atelier-mise.vercel.app</a>",
+          null,
+          "Dopo cinque mesi, volevo portarlo a termine. È il regalo che faccio a me stesso per i miei 20 anni."
+        ]
+      },
+      "zh": {
+        "subtitle": "开发 · 设计 · 工具"
+      }
+    }
   },
   {
     "id": "addiction",
@@ -36,7 +78,29 @@
       "成瘾不是我们不够努力，是大脑的回路被训练到了我们感觉会后悔和不可控制的方向了。意志力在这里几乎是以卵击石。",
       "<section-break>换一个喂法</section-break>",
       "画画、运动、创作，同样能激活这个地方，大脑不会先判断这件事对你也就是意识体来说是不是好事，它更容易被当下的感觉驱动。所以与其跟自己的脑子硬刚，不如换一个东西喂它。"
-    ]
+    ],
+    "i18n": {
+      "en": {
+        "title": "Addiction and <em>Willpower</em>",
+        "body": [
+          "Willpower is not the solution to addiction. As a kid, when I was hooked on video games and even staying up all night, I thought it was a matter of willpower and self-control. Later, reading and watching brain-science research, I learned about a tiny structure called the <a href=\"https://en.wikipedia.org/wiki/Nucleus_accumbens\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">nucleus accumbens</a>. It is only the size of a peanut, yet it drives almost every behavior that makes you unable to stop.",
+          "The dopamine it releases is not pleasure itself but the anticipation of pleasure. The harder something is to get, the more hope and excitement it keeps alive. That is why you immediately scroll to the next video after finishing one: not because the last one was so good, but because the next one might be better.",
+          "Addiction isn't a lack of effort. It's that the brain's circuits have been trained in a direction we feel regret about and can't control. Against that, willpower is like throwing an egg at a rock.",
+          "<section-break>Feed it something different</section-break>",
+          "Drawing, exercise and creating can activate the same region. The brain doesn't first judge whether something is good for you, the conscious self; it is more easily driven by how things feel in the moment. So instead of fighting your own brain head-on, feed it something else."
+        ]
+      },
+      "it": {
+        "title": "Dipendenza e <em>forza di volontà</em>",
+        "body": [
+          "La forza di volontà non è la soluzione alla dipendenza. Da bambino, quando ero ossessionato dai videogiochi e facevo persino le ore piccole, pensavo fosse un problema di forza di volontà e autocontrollo. Poi, leggendo e guardando video di ricerca sulle neuroscienze, ho scoperto una piccola struttura chiamata <a href=\"https://it.wikipedia.org/wiki/Nucleus_accumbens\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">nucleo accumbens</a>, grande solo come un'arachide, eppure alla guida di quasi tutti i comportamenti che ti impediscono di fermarti.",
+          "La dopamina che rilascia non è il piacere in sé, ma l'attesa del piacere. Più qualcosa è difficile da ottenere, più mantiene viva la speranza e l'eccitazione. Ecco perché, finito un video, si passa subito al successivo: non perché il precedente fosse così bello, ma perché il prossimo potrebbe esserlo di più.",
+          "La dipendenza non nasce da mancanza di impegno: i circuiti del cervello sono stati allenati in una direzione di cui ci pentiamo e che non riusciamo a controllare. In questo la forza di volontà è come lanciare un uovo contro un muro.",
+          "<section-break>Cambia ciò che gli dai in pasto</section-break>",
+          "Disegnare, fare sport, creare possono attivare la stessa area. Il cervello non valuta prima se una cosa fa bene a te, cioè alla coscienza; si lascia guidare più facilmente dalle sensazioni del momento. Quindi, invece di scontrarti frontalmente con il tuo cervello, è meglio dargli qualcos'altro di cui nutrirsi."
+        ]
+      }
+    }
   },
   {
     "id": "opensource",
@@ -49,7 +113,23 @@
     "body": [
       "ComfyUI 太推荐这个 AI 生成模型，用得比较多 <a href=\"https://civitai.com/models/133005/juggernaut-xl\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Juggernaut XL</a>，下载之后放入 checkpoints 这个文件夹里就好了",
       "路径在 C:\\用户\\<你的用户名>\\文档\\ComfyUI\\models 里."
-    ]
+    ],
+    "i18n": {
+      "en": {
+        "title": "Open-Source <em>Models</em>",
+        "body": [
+          "I highly recommend ComfyUI for AI image generation. The model I use most is <a href=\"https://civitai.com/models/133005/juggernaut-xl\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Juggernaut XL</a>; after downloading it, just drop it into the checkpoints folder.",
+          "The path is C:\\Users\\YourUsername\\Documents\\ComfyUI\\models."
+        ]
+      },
+      "it": {
+        "title": "Modelli <em>open source</em>",
+        "body": [
+          "Consiglio moltissimo ComfyUI per la generazione di immagini con l'AI. Il modello che uso di più è <a href=\"https://civitai.com/models/133005/juggernaut-xl\" target=\"_blank\" style=\"color:var(--gold);border-bottom:1px solid var(--gold-d)\">Juggernaut XL</a>: dopo averlo scaricato, basta metterlo nella cartella checkpoints.",
+          "Il percorso è C:\\Utenti\\NomeUtente\\Documenti\\ComfyUI\\models."
+        ]
+      }
+    }
   },
   {
     "id": "japan",
@@ -62,7 +142,32 @@
     "body": [
       "我想起了第一次出國，在2019年疫情之前去的，還是挺感慨的。",
       "<video controls poster=\"images/日本视频封面.jpg\" style=\"width:100%;border-radius:10px;margin:14px 0;max-height:70vh\"><source src=\"images/日本.mp4\" type=\"video/mp4\"></video>"
-    ]
+    ],
+    "i18n": {
+      "zh": {
+        "title": "japan，第一次<em>出国</em>",
+        "subtitle": "旅行 · 回忆",
+        "body": [
+          "我想起了第一次出国，在2019年疫情之前去的，还是挺感慨的。",
+          null
+        ]
+      },
+      "en": {
+        "title": "Japan: My First Time <em>Abroad</em>",
+        "body": [
+          "I remembered my first trip abroad, in 2019, before the pandemic. It still stirs up a lot of feelings.",
+          null
+        ]
+      },
+      "it": {
+        "title": "Giappone: la prima volta <em>all'estero</em>",
+        "subtitle": "Viaggi · Ricordi",
+        "body": [
+          "Ho ripensato alla mia prima volta all'estero, nel 2019, prima della pandemia. Mi emoziona ancora molto.",
+          null
+        ]
+      }
+    }
   },
   {
     "id": "cat",
@@ -75,7 +180,32 @@
     "body": [
       "發現一個豬咪🐖，但是我手上什麽都沒有，就拍了個照片挺無聊。",
       "<img src=\"images/貓貓.jpg\" style=\"width:100%;border-radius:10px;margin:14px 0;\">"
-    ]
+    ],
+    "i18n": {
+      "zh": {
+        "title": "猫<em>猫</em>",
+        "body": [
+          "发现一个猪咪🐖，但是我手上什么都没有，就拍了个照片挺无聊。",
+          null
+        ]
+      },
+      "en": {
+        "title": "Kitty <em>Cat</em>",
+        "subtitle": "Daily Life",
+        "body": [
+          "Found a little piggy-cat 🐖, but I had nothing on me, so I just took a photo. Pretty boring.",
+          null
+        ]
+      },
+      "it": {
+        "title": "Il <em>gattino</em>",
+        "subtitle": "Vita quotidiana",
+        "body": [
+          "Ho trovato un gatto-maialino 🐖, ma non avevo niente con me, così ho solo scattato una foto. Un po' noioso.",
+          null
+        ]
+      }
+    }
   },
   {
     "id": "xmas",
@@ -88,7 +218,32 @@
     "body": [
       "可愛的樹樹🎄，聖誕快樂🦌",
       "<img src=\"images/樹木.png\" style=\"width:100%;border-radius:10px;margin:14px 0;\">"
-    ]
+    ],
+    "i18n": {
+      "zh": {
+        "title": "圣诞<em>树</em>",
+        "body": [
+          "可爱的树树🎄，圣诞快乐🦌",
+          null
+        ]
+      },
+      "en": {
+        "title": "Christmas <em>Tree</em>",
+        "subtitle": "Daily Life",
+        "body": [
+          "A cute little tree 🎄 Merry Christmas 🦌",
+          null
+        ]
+      },
+      "it": {
+        "title": "Albero di <em>Natale</em>",
+        "subtitle": "Vita quotidiana",
+        "body": [
+          "Un alberello carino 🎄 Buon Natale 🦌",
+          null
+        ]
+      }
+    }
   },
   {
     "id": "start",
@@ -100,6 +255,28 @@
     "nextId": null,
     "body": [
       "我建立一個blog網站内容還在更新嘿嘿，來玩兒（有意思）"
-    ]
+    ],
+    "i18n": {
+      "zh": {
+        "title": "我开创了我的<em>blog</em>",
+        "body": [
+          "我建立了一个blog网站，内容还在更新嘿嘿，来玩儿（有意思）"
+        ]
+      },
+      "en": {
+        "title": "I Started My <em>Blog</em>",
+        "subtitle": "Daily Life",
+        "body": [
+          "I've set up a blog site. Content is still being added, hehe. Come hang out (it's fun)."
+        ]
+      },
+      "it": {
+        "title": "Ho aperto il mio <em>blog</em>",
+        "subtitle": "Vita quotidiana",
+        "body": [
+          "Ho creato un sito blog, i contenuti sono ancora in aggiornamento, eheh. Passa a dare un'occhiata (è divertente)."
+        ]
+      }
+    }
   }
 ]
