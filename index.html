@@ -939,6 +939,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-en{font-family:'Jost',sans-serif;font-weight:300;font-size:.55rem;letter-spacing:.22em;text-transform:uppercase;color:var(--fg-d);margin-bottom:8px}
 .lb-rule{height:1px;background:var(--line2);margin-bottom:16px}
 .lb-desc{font-family:'Jost',sans-serif;font-weight:300;font-size:.67rem;line-height:2.1;color:var(--fg-d);letter-spacing:.04em;white-space:pre-line}
+/* 电脑端 / 平板端（横屏）灯箱文字放大；手机端（≤768px）保持原样 */
+@media (min-width:769px){
+  .lb-side{width:clamp(230px,18vw,300px);}
+  .lb-idx{font-size:.7rem;margin-bottom:16px}
+  .lb-title{font-size:clamp(1.7rem,1.2rem + .6vw,2.1rem);margin-bottom:8px}
+  .lb-en{font-size:.75rem;margin-bottom:12px}
+  .lb-rule{margin-bottom:18px}
+  .lb-desc{font-size:clamp(.92rem,.8rem + .3vw,1.08rem);line-height:1.95;letter-spacing:.03em}
+}
 /* ── 介绍文字：错落淡入（标题 → 英文名 → 分隔线展开 → 正文），关闭/切图时整体快速淡出 ──
    JS 仍然只切换 #lbSide 的内联 opacity（0 / 1）；这里用属性选择器读取它，驱动子元素各自的过渡。
    外层自己的 opacity 过渡去掉，避免「外层淡 × 子层淡」叠成双重淡入而显得发闷。 */
@@ -2265,6 +2274,15 @@ function rippleThen(e,el,id){
   },180);
 }
 </script>
+<style id="zh-nav-size">
+/* 中文模式：导航栏（类型栏）字体放大。想再大/小，改下面的 rem 数值即可 */
+html[data-jh-lang="zh"] .tab{font-size:.85rem;letter-spacing:.14em}
+html[data-jh-lang="zh"] .tab.on{letter-spacing:.16em}
+html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
+@media(max-width:768px){
+  html[data-jh-lang="zh"] .tab{font-size:.8rem;letter-spacing:.1em;padding:13px 14px}
+}
+</style>
 </head>
 <body class="is-loading">
 <canvas id="starsBg"></canvas>
@@ -7367,7 +7385,7 @@ document.addEventListener('click',function(e){
     }
     var seq=(apply._seq=(apply._seq||0)+1);
     function runFor(el){ changes.forEach(function(c){ if(c.el===el) c.fn(); }); }
-    function commitAll(){ changes.forEach(function(c){ c.fn(); }); }
+    function commitAll(){ document.documentElement.setAttribute('data-jh-lang',lang); changes.forEach(function(c){ c.fn(); }); }
     function realign(){ try{ if(typeof moveIndicator==='function') moveIndicator(document.querySelector('.tab.on')); }catch(e){} }
     document.documentElement.lang=HTMLLANG[lang]||'zh';
 
