@@ -2281,7 +2281,7 @@ function rippleThen(e,el,id){
     </div>
     <div class="mob-identity">
       <div class="mob-name">Jin Hangtao</div>
-      <button type="button" class="mob-lang lang-btn" aria-haspopup="true" aria-expanded="false" title="Language · 语言 · Lingua"><span class="lang-cur">LANG</span></button>
+      <button type="button" class="mob-lang lang-btn" aria-haspopup="true" aria-expanded="false" aria-label="Language"><span class="lang-cur">LANG</span></button>
     </div>
     <div class="mob-toggle" id="mobToggle">▾</div>
   </div>
@@ -2398,7 +2398,7 @@ function rippleThen(e,el,id){
     <a class="tab"    href="#" onclick="show('ps',this);return false;">Graphic</a>
     <a class="tab"    href="#" onclick="show('video',this);return false;">Video</a>
     <a class="tab"    href="#" onclick="show('stmt',this);return false;">Statement</a>
-    <button type="button" class="lang-btn" aria-haspopup="true" aria-expanded="false" title="Language · 语言 · Lingua"><span class="lang-cur">LANG</span></button>
+    <button type="button" class="lang-btn" aria-haspopup="true" aria-expanded="false" aria-label="Language"><span class="lang-cur">LANG</span></button>
     <div id="tabIndicator"></div>
 </div>
 
@@ -4111,6 +4111,7 @@ function _lbShow(idx, opening){
   var tok = ++_lbTok;
   if(window._lbResetZoom) window._lbResetZoom(true);
   var d    = META[idx]||{title:'',en:'',desc:''};
+  if(window.JHLang && JHLang.work) d = JHLang.work(d, idx);
   var el   = document.querySelector('[onclick="openLb('+idx+')"]');
   var _thEl = el && el.querySelector('img');
   var src  = _thEl ? (_thEl.getAttribute('data-full') ? new URL(_thEl.getAttribute('data-full'), document.baseURI).href : _thEl.src) : '';   // 有 data-full 用大图，否则回退缩略图地址
@@ -7037,6 +7038,180 @@ document.addEventListener('click',function(e){
 (function(){
   var DICT={"Name": {"en": "Name", "it": "Nome", "zh": "姓名"}, "Period": {"en": "Period", "it": "Periodo", "zh": "出生"}, "B. 2006": {"en": "B. 2006", "it": "N. 2006", "zh": "2006 年生"}, "B . 2006": {"en": "B . 2006", "it": "N. 2006", "zh": "2006 年生"}, "Education": {"en": "Education", "it": "Formazione", "zh": "教育"}, "LAFA Affiliated High School · Accademia di Belle Arti di Roma": {"it": "Liceo annesso alla LAFA · Accademia di Belle Arti di Roma", "zh": "鲁迅美术学院附属中学 · 罗马国立美术学院"}, "LAFA Affiliated High School": {"it": "Liceo annesso alla LAFA", "zh": "鲁迅美术学院附属中学"}, "Accademia di Belle Arti di Roma": {"zh": "罗马国立美术学院"}, "Disciplines": {"en": "Disciplines", "it": "Discipline", "zh": "专业"}, "ART": {"en": "ART", "it": "ARTE", "zh": "艺术"}, "About": {"en": "About", "it": "Info", "zh": "关于"}, "Blog": {"en": "Blog", "it": "Blog", "zh": "博客"}, "Gallery": {"en": "Gallery", "it": "Galleria", "zh": "画廊"}, "3D Modeling": {"en": "3D Modeling", "it": "Modellazione 3D", "zh": "三维建模"}, "Photography": {"en": "Photography", "it": "Fotografia", "zh": "摄影"}, "AI · ComfyUI": {"en": "AI · ComfyUI", "it": "IA · ComfyUI", "zh": "人工智能 · ComfyUI"}, "Sound Design": {"en": "Sound Design", "it": "Sound design", "zh": "声音设计"}, "Graphic Design": {"en": "Graphic Design", "it": "Grafica", "zh": "平面设计"}, "Video": {"en": "Video", "it": "Video", "zh": "视频"}, "Statement": {"en": "Statement", "it": "Manifesto", "zh": "宣言"}, "© Jin Hangtao. All rights reserved.": {"it": "© Jin Hangtao. Tutti i diritti riservati.", "zh": "© Jin Hangtao. 保留所有权利。"}, "3D": {"en": "3D", "it": "3D", "zh": "三维"}, "Photo": {"en": "Photo", "it": "Foto", "zh": "摄影"}, "AI": {"en": "AI", "it": "IA", "zh": "AI"}, "Sound": {"en": "Sound", "it": "Suono", "zh": "声音"}, "Graphic": {"en": "Graphic", "it": "Grafica", "zh": "平面"}, "Artist Statement · 关于此博客和我的想法": {"en": "Artist Statement · About this blog and my thoughts", "it": "Dichiarazione d’artista · Su questo blog e sui miei pensieri"}, "此博客于19嵗开发（2025-2026），為記錄blog日常以及保存分享自己在18嵗前的創作和回憶，今天，我們還年輕。": {"en": "I built this blog at 19 (2025–2026) to record my everyday life and to keep and share the work and memories I made before turning 18. Today, we are still young.", "it": "Ho sviluppato questo blog a 19 anni (2025–2026) per raccontare la quotidianità e per conservare e condividere le opere e i ricordi creati prima dei 18 anni. Oggi siamo ancora giovani."}, "博客作品页独立栏目里的内容，创作于13至18岁之间——在鲁迅美术学院附属中学的画室，隨后在製作作品集時拓展至三维建模。後來18嵗考入罗马国立美术学院，接觸到聲音設計，摄影与 AI 生图等媒介，還在探索。": {"en": "The works in the separate sections of this blog were made between the ages of 13 and 18 — first in the studio of the high school affiliated with the Luxun Academy of Fine Arts, then expanding into 3D modeling while preparing my portfolio. At 18 I was admitted to the Accademia di Belle Arti di Roma, where I came across sound design, photography and AI image generation. I am still exploring.", "it": "Le opere nelle sezioni dedicate di questo blog sono state create tra i 13 e i 18 anni: prima nello studio del liceo annesso all’Accademia di Belle Arti Luxun, poi con la modellazione 3D durante la preparazione del portfolio. A 18 anni sono stato ammesso all’Accademia di Belle Arti di Roma, dove ho conosciuto sound design, fotografia e generazione di immagini con IA. Sto ancora esplorando."}, "如果绘画是被動的和服從的，我能夠明顯感覺到是一條我会后悔和難過的路，所以在美院報考時选择了其他的專業，比如藝術新技術。": {"en": "If painting means being passive and obedient, I could clearly feel it would be a path I would regret and be sad about — so when applying to the academy I chose other majors, such as New Technologies of Art.", "it": "Se dipingere significa essere passivi e obbedienti, sentivo chiaramente che sarebbe stata una strada di cui mi sarei pentito e rattristato; perciò all’esame d’ammissione ho scelto altri indirizzi, come Nuove Tecnologie dell’Arte."}, "這裏面的作品都是18嵗包括18嵗以内創作的，繼續探索一些更有意思的東西和工具留在blog這裏或者單獨創建平臺，謝謝屏幕前的各位嘻😄。": {"en": "All the works here were made at 18 or younger. Whatever more interesting things and tools I keep exploring will stay here on the blog or get their own platform. Thank you to everyone on the other side of the screen 😄.", "it": "Tutte le opere qui presenti sono state create entro i 18 anni. Le cose e gli strumenti più interessanti che continuerò a esplorare resteranno qui sul blog o avranno una piattaforma a parte. Grazie a tutti voi dall’altra parte dello schermo 😄."}, "个人原创开发 创作及排版工具应用 — Online": {"en": "Original personal project: creative & layout tool apps — Online", "it": "Progetto personale originale: app per creazione e impaginazione — Online"}, "Atelier Mise 米斯 — 过程兼结果创作工作台": {"en": "Atelier Mise — a workbench for both process and result", "it": "Atelier Mise — un banco di lavoro per processo e risultato"}, "作品集": {"en": "Portfolio", "it": "Portfolio"}, "冥想视听空间": {"en": "Meditative audiovisual space", "it": "Spazio audiovisivo meditativo"}, "· Android App 是原生版本，Flutter App 是跨平台框架版当前仅 Android；桌面端推荐 Windows App，Tauri App 体积更小但外部链接暂时打不开(下载时若遇安全提示，点击右侧 ··· \"保留\"可正常安装)": {"en": "· The Android App is the native version; the Flutter App is the cross-platform framework version (Android only for now). On desktop I recommend the Windows App; the Tauri App is smaller, but external links don’t open yet. (If a security warning appears while downloading, click ··· on the right and choose “Keep” to install normally.)", "it": "· L’app Android è la versione nativa; l’app Flutter è la versione con framework multipiattaforma (per ora solo Android). Su desktop consiglio l’app Windows; l’app Tauri è più leggera ma per ora i link esterni non si aprono. (Se durante il download compare un avviso di sicurezza, clicca ··· a destra e scegli «Conserva» per installare normalmente.)"}, "我的 ▶️": {"en": "My ▶️", "it": "Il mio ▶️"}, "YouTube影片頻道": {"en": "YouTube channel", "it": "canale YouTube"}, "Fine Art": {"en": "Fine Art", "it": "Belle arti", "zh": "绘画"}, "绘画 · Ages 13–16": {"en": "Painting · Ages 13–16", "it": "Pittura · 13–16 anni"}, "Graphite · Charcoal · Oil": {"it": "Grafite · Carboncino · Olio", "zh": "石墨 · 炭笔 · 油画"}, "三维建模 · Ages 17–18": {"en": "3D modeling · Ages 17–18", "it": "Modellazione 3D · 17–18 anni"}, "3D · Film · Digital": {"it": "3D · Cinema · Digitale", "zh": "三维 · 影像 · 数字"}, "人工智能生图 · Age 18": {"en": "AI image generation · Age 18", "it": "Immagini con IA · 18 anni"}, "\"keeping a record of the beginning of me.\"": {"it": "«tenere traccia dei miei inizi.»", "zh": "“记录下我的开端。”"}, "— Jin Hangtao · 金航滔 · Aged 13–18": {"it": "— Jin Hangtao · 金航滔 · Dai 13 ai 18 anni", "zh": "— Jin Hangtao · 金航滔 · 13–18 岁"}, "Graphite": {"it": "Grafite", "zh": "石墨"}, "Charcoal": {"it": "Carboncino", "zh": "炭笔"}, "Oil on Canvas": {"it": "Olio su tela", "zh": "布面油画"}, "绘画 · 写生习作 · Ages 13–16": {"en": "Painting · Life studies · Ages 13–16", "it": "Pittura · Studi dal vero · 13–16 anni"}, "Selected Works": {"it": "Opere scelte", "zh": "代表作品"}, "代表作品 · Charcoal · Oil · Graphite": {"en": "Selected works · Charcoal · Oil · Graphite", "it": "Opere scelte · Carboncino · Olio · Grafite"}, "大卫像": {"en": "David Bust", "it": "Busto del David"}, "父母": {"en": "Parents", "it": "Genitori"}, "自画像": {"en": "Self-Portrait", "it": "Autoritratto"}, "女性画像": {"en": "Female Portrait", "it": "Ritratto femminile"}, "画室之窗": {"en": "Studio Window", "it": "Finestra dello studio"}, "仰望": {"en": "Upward Gaze", "it": "Sguardo verso l’alto"}, "大卫像 . 正面": {"en": "David Bust · Front", "it": "Busto del David · frontale"}, "爱奥尼柱头": {"en": "Ionic Capital", "it": "Capitello ionico"}, "衞生間": {"en": "Restroom", "it": "Bagno"}, "韩老师与其女儿": {"en": "Teacher Han and His Daughter", "it": "Il maestro Han e sua figlia"}, "大衣里的孩子": {"en": "Child in a Coat", "it": "Bambino nel cappotto"}, "自画像 · 全身": {"en": "Self-Portrait · Full Body", "it": "Autoritratto · figura intera"}, "女性黑人": {"en": "Black Woman", "it": "Donna nera"}, "男人 · 胸像": {"en": "Male Bust", "it": "Busto maschile"}, "芭蕾舞者": {"en": "Ballet Dancer", "it": "Ballerina"}, "男性侧靠": {"en": "Man Leaning Sideways", "it": "Uomo appoggiato di lato"}, "阿波罗": {"en": "Apollo", "it": "Apollo"}, "达莫克塞诺斯": {"en": "Damoxenos", "it": "Damosseno"}, "男性身像": {"en": "Male Figure", "it": "Figura maschile"}, "女性坐靠": {"en": "Seated Woman Leaning", "it": "Donna seduta appoggiata"}, "男性人像": {"en": "Male Portrait", "it": "Ritratto maschile"}, "习作一览": {"en": "Studies Overview", "it": "Panoramica degli studi"}, "四联写生": {"en": "Four Portrait Studies", "it": "Quattro studi di ritratto"}, "人像习作组": {"en": "Portrait Study Group", "it": "Gruppo di studi di ritratto"}, "综合练习": {"en": "Mixed Exercises", "it": "Esercizi misti"}, "习作组合": {"en": "Study Composite", "it": "Composizione di studi"}, "古希臘": {"en": "Ancient Greece", "it": "Antica Grecia"}, "賽博城市": {"en": "Cyber City", "it": "Città cyberpunk"}, "地下室": {"en": "Basement", "it": "Seminterrato"}, "佛祖": {"en": "Buddha", "it": "Buddha"}, "桌子": {"en": "Table", "it": "Tavolo"}, "极光": {"en": "Aurora", "it": "Aurora"}, "歸途": {"en": "The Way Home", "it": "Il ritorno"}, "城": {"en": "City", "it": "Città"}, "地铁": {"en": "Subway", "it": "Metropolitana"}, "雪夜": {"en": "Snowy Night", "it": "Notte di neve"}, "黑洞": {"en": "Black Hole", "it": "Buco nero"}, "地球": {"en": "Earth", "it": "Terra"}, "作業 01": {"en": "Assignment 01", "it": "Esercizio 01"}, "作业": {"en": "Assignment", "it": "Esercizio"}, "作業": {"en": "Assignment", "it": "Esercizio"}, "产品": {"en": "Product", "it": "Prodotto"}, "产品1": {"en": "Product 1", "it": "Prodotto 1"}, "产品2": {"en": "Product 2", "it": "Prodotto 2"}, "女孩": {"en": "Girl", "it": "Ragazza"}, "卖花车": {"en": "Flower Cart", "it": "Carretto dei fiori"}, "樹": {"en": "Tree", "it": "Albero"}, "列车": {"en": "Train", "it": "Treno"}, "街": {"en": "Street", "it": "Strada"}, "车站": {"en": "Station", "it": "Stazione"}, "洗手": {"en": "Washing Hands", "it": "Lavarsi le mani"}, "牌子": {"en": "Sign", "it": "Cartello"}, "广告牌子": {"en": "Billboard", "it": "Cartellone pubblicitario"}, "雨夜商店": {"en": "Rainy Night Shop", "it": "Negozio nella notte di pioggia"}, "海灘": {"en": "Beach", "it": "Spiaggia"}, "采集": {"en": "Gathering", "it": "Raccolta"}, "漁場": {"en": "Fishing Ground", "it": "Zona di pesca"}, "救援": {"en": "Rescue", "it": "Soccorso"}, "街道": {"en": "Streets", "it": "Strade"}, "城市": {"en": "City", "it": "Città"}, "采集地": {"en": "Gathering Site", "it": "Luogo di raccolta"}, "地鐵": {"en": "Subway", "it": "Metropolitana"}, "森林": {"en": "Forest", "it": "Foresta"}, "日式海報": {"en": "Japanese-Style Poster", "it": "Poster in stile giapponese"}, "日係海報": {"en": "Japanese-Style Poster II", "it": "Poster in stile giapponese II"}, "面具海報": {"en": "Mask Poster", "it": "Poster con maschera"}, "尊貴海報": {"en": "Prestige Poster", "it": "Poster «prestigio»"}, "建筑海报": {"en": "Architecture Poster", "it": "Poster di architettura"}, "建筑海报 01": {"en": "Architecture Poster 01", "it": "Poster di architettura 01"}, "音乐海报 01": {"en": "Music Poster 01", "it": "Poster musicale 01"}, "音乐海报 02": {"en": "Music Poster 02", "it": "Poster musicale 02"}, "音乐海报 03": {"en": "Music Poster 03", "it": "Poster musicale 03"}, "音乐海报 04": {"en": "Music Poster 04", "it": "Poster musicale 04"}, "音乐海报 05": {"en": "Music Poster 05", "it": "Poster musicale 05"}, "音乐海报 06": {"en": "Music Poster 06", "it": "Poster musicale 06"}, "音乐海报 07": {"en": "Music Poster 07", "it": "Poster musicale 07"}, "音乐海报 08": {"en": "Music Poster 08", "it": "Poster musicale 08"}, "音乐海报 09": {"en": "Music Poster 09", "it": "Poster musicale 09"}, "音乐海报 10": {"en": "Music Poster 10", "it": "Poster musicale 10"}, "书籍封面 01": {"en": "Book Cover 01", "it": "Copertina 01"}, "书籍封面 02": {"en": "Book Cover 02", "it": "Copertina 02"}, "书籍封面 03": {"en": "Book Cover 03", "it": "Copertina 03"}, "书籍封面 04": {"en": "Book Cover 04", "it": "Copertina 04"}, "Full-Body Studies": {"it": "Studi di figura intera", "zh": "写生全身"}, "写生全身 · Graphite": {"en": "Full-body life studies · Graphite", "it": "Studi dal vero di figura intera · Grafite"}, "Studies Composite": {"it": "Studi compositi", "zh": "综合习作"}, "综合习作 · Mixed Practice · Various Media · Ages 13–16": {"en": "Composite studies · Mixed practice · Various media · Ages 13–16", "it": "Studi compositi · Esercizi misti · Tecniche varie · 13–16 anni"}, "空间创作 · Ages 17–18 · 18 works": {"en": "Spatial creation · Ages 17–18 · 18 works", "it": "Creazione spaziale · 17–18 anni · 18 opere"}, "Age 18": {"en": "Age 18", "it": "18 anni", "zh": "18 岁"}, "Age 17": {"en": "Age 17", "it": "17 anni", "zh": "17 岁"}, "3D Modeling · Age 18": {"en": "3D Modeling · Age 18", "it": "Modellazione 3D · 18 anni", "zh": "三维建模 · 18 岁"}, "3D Modeling · Age 17": {"en": "3D Modeling · Age 17", "it": "Modellazione 3D · 17 anni", "zh": "三维建模 · 17 岁"}, "摄影 · Age 18 · 9 photographs": {"en": "Photography · Age 18 · 9 photographs", "it": "Fotografia · 18 anni · 9 fotografie"}, "Photography · Age 18": {"en": "Photography · Age 18", "it": "Fotografia · 18 anni", "zh": "摄影 · 18 岁"}, "人工智能生图 · Stable Diffusion · Age 18 · 10 images": {"en": "AI image generation · Stable Diffusion · Age 18 · 10 images", "it": "Immagini con IA · Stable Diffusion · 18 anni · 10 immagini"}, "ComfyUI · Stable Diffusion · Age 18": {"en": "ComfyUI · Stable Diffusion · Age 18", "it": "ComfyUI · Stable Diffusion · 18 anni", "zh": "ComfyUI · Stable Diffusion · 18 岁"}, "声音设计 · Reaper · Age 18": {"en": "Sound design · Reaper · Age 18", "it": "Sound design · Reaper · 18 anni"}, "Reaper · Sound Design": {"en": "Reaper · Sound Design", "it": "Reaper · Sound design", "zh": "Reaper · 声音设计"}, "40多亿年的故事": {"en": "A Story of Over 4 Billion Years", "it": "Una storia di oltre 4 miliardi di anni"}, "这个音频作品3分10秒压缩了40多亿年的地球初期历史，用声音讲地球从一开始到多细胞生命出现的故事。 前面是地球刚形成时的混乱和喷发的岩浆，用尖锐的声音表现；然后慢慢听到水流声和气泡声， 像单细胞生命慢慢冒出来；最后多细胞生命登场，从海洋生物、鸟类、爬行动物，到人类，低沉的声音让这一切听起来很史诗，很有感觉。": {"en": "In 3 minutes and 10 seconds, this audio piece compresses more than 4 billion years of early Earth history, telling through sound the story from the very beginning of the planet to the emergence of multicellular life. The opening is the chaos of the newly formed Earth and erupting magma, rendered with sharp sounds; then you slowly hear flowing water and bubbles, like single-celled life gradually surfacing; finally multicellular life arrives — sea creatures, birds, reptiles and humans — and the low, deep sounds make it all feel epic.", "it": "In 3 minuti e 10 secondi, questo brano audio comprime oltre 4 miliardi di anni di storia della Terra primordiale, raccontando con il suono il percorso dagli inizi del pianeta alla comparsa della vita pluricellulare. L’inizio è il caos della Terra appena formata e del magma in eruzione, reso con suoni acuti; poi si sentono lentamente acqua che scorre e bolle, come la vita unicellulare che affiora; infine arriva la vita pluricellulare — creature marine, uccelli, rettili e gli esseri umani — e i suoni bassi e profondi rendono tutto epico."}, "Speed": {"en": "Speed", "it": "Velocità", "zh": "速度"}, "平面设计 · 海报 · 书籍封面 · Age 17–18": {"en": "Graphic design · Posters · Book covers · Age 17–18", "it": "Grafica · Poster · Copertine di libri · 17–18 anni"}, "Poster Design": {"it": "Design di poster", "zh": "海报设计"}, "海报设计": {"en": "Poster Design", "it": "Design di poster"}, "Poster Design · Photoshop": {"it": "Design di poster · Photoshop", "zh": "海报设计 · Photoshop"}, "Poster Design · Illustrator": {"it": "Design di poster · Illustrator", "zh": "海报设计 · Illustrator"}, "Folded Posters": {"it": "Poster piegati", "zh": "折叠海报"}, "折叠海报设计": {"en": "Folded Poster Design", "it": "Design di poster piegati"}, "Book Cover Design": {"it": "Design di copertine", "zh": "书籍封面设计"}, "书籍封面设计": {"en": "Book Cover Design", "it": "Design di copertine di libri"}, "Book Cover Design · Photoshop": {"it": "Design di copertine · Photoshop", "zh": "书籍封面设计 · Photoshop"}, "互动影像 · Digital Video · Accademia di Belle Arti di Roma": {"en": "Interactive video · Digital Video · Accademia di Belle Arti di Roma", "it": "Video interattivo · Video digitale · Accademia di Belle Arti di Roma"}, "Interactive Video": {"it": "Video interattivo", "zh": "互动影像"}, "— READ MORE": {"it": "— LEGGI DI PIÙ", "zh": "— 阅读更多"}, "部落格": {"en": "Blog", "it": "Blog"}, "日常 · Writing · 金航滔": {"en": "Daily life · Writing · Jin Hangtao", "it": "Vita quotidiana · Scrittura · Jin Hangtao"}, "Thank You, 13–16.": {"it": "Grazie, 13–16.", "zh": "谢谢你，13–16。"}, "You": {"it": "Mi", "zh": "你"}, "Shaped": {"it": "hai", "zh": "塑造了"}, "Me.": {"it": "plasmato.", "zh": "我。"}, "Now, Reborn at 16,": {"it": "Ora, rinato a 16 anni,", "zh": "如今，16 岁重生，"}, "a New Life Begins.": {"it": "inizia una nuova vita.", "zh": "新的生活开始了。"}, "直到16岁以后，": {"en": "Only after I turned 16,", "it": "Solo dopo i 16 anni,"}, "我为人生更换了存在方式。": {"en": "did I change the way I exist in life.", "it": "ho cambiato il mio modo di esistere nella vita."}, "新生也从此开始。": {"en": "And a new life began from then on.", "it": "E da allora è iniziata una nuova vita."}, "截图后发送给微信好友": {"en": "Take a screenshot and send it to a WeChat friend", "it": "Fai uno screenshot e invialo a un amico su WeChat"}, "发送": {"en": "Send", "it": "Invia"}};
   var H2={"About <i>Me</i>": {"it": "Su <i>di me</i>", "zh": "关于<i>我</i>"}, "Fine Art <i>Gallery</i>": {"it": "Galleria <i>d’arte</i>", "zh": "绘画<i>画廊</i>"}, "3D <i>Modeling</i>": {"it": "Modellazione <i>3D</i>", "zh": "三维<i>建模</i>"}, "<i>Photography</i>": {"it": "<i>Fotografia</i>", "zh": "<i>摄影</i>"}, "AI · <i>ComfyUI</i>": {"it": "IA · <i>ComfyUI</i>", "zh": "人工智能 · <i>ComfyUI</i>"}, "Sound <i>Design</i>": {"it": "Sound <i>design</i>", "zh": "声音<i>设计</i>"}, "Graphic <i>Design</i>": {"it": "Design <i>grafico</i>", "zh": "平面<i>设计</i>"}, "<i>Video</i>": {"it": "<i>Video</i>", "zh": "<i>视频</i>"}, "<i>Blog</i>": {"it": "<i>Blog</i>", "zh": "<i>博客</i>"}};
+
+  /* ═══ 作品区（Gallery / 3D / Photo / AI / Graphic）文字翻译 ═══ */
+  var X={
+    "涅墨顿":{en:"Nemeton",it:"Nemeton"},
+    "男人侧靠":{en:"Man Leaning Sideways",it:"Uomo appoggiato di lato"},
+    "男性像":{en:"Male Figure",it:"Figura maschile"},
+    "作业 02":{en:"Assignment 02",it:"Esercizio 02"},
+    "作業 03":{en:"Assignment 03",it:"Esercizio 03"},
+    "产品 01":{en:"Product 01",it:"Prodotto 01"},
+    "产品 02":{en:"Product 02",it:"Prodotto 02"},
+    "产品 03":{en:"Product 03",it:"Prodotto 03"},
+    "日式海報 01":{en:"Japanese-Style Poster 01",it:"Poster in stile giapponese 01"},
+    "日式海報 02":{en:"Japanese-Style Poster 02",it:"Poster in stile giapponese 02"},
+    "歐美海報 01":{en:"Western-Style Poster 01",it:"Poster in stile occidentale 01"},
+    "歐美海報 02":{en:"Western-Style Poster 02",it:"Poster in stile occidentale 02"},
+    "SHIFI海報 01":{en:"Sci-Fi Poster 01",it:"Poster sci-fi 01"},
+    "SHIFI海報 02":{en:"Sci-Fi Poster 02",it:"Poster sci-fi 02"},
+    "ShiFi海報":{en:"Sci-Fi Poster",it:"Poster sci-fi"},
+    "schifi海報":{en:"Sci-Fi Poster II",it:"Poster sci-fi II"},
+    "Dreaming Inside an Elastic Space - 彈性空間":{en:"Dreaming Inside an Elastic Space",it:"Sognare in uno spazio elastico"}
+  };
+  for(var xk in X){ if(!DICT[xk]) DICT[xk]=X[xk]; }
+
+  /* 英文副标题 "David Bust · Graphite · Age 16" 按「 · 」分段翻译 */
+  var SEG={
+    "David Bust":{zh:"大卫像",it:"Busto del David"},
+    "Parents":{zh:"父母",it:"Genitori"},
+    "Self-Portrait":{zh:"自画像",it:"Autoritratto"},
+    "Female Portrait":{zh:"女性画像",it:"Ritratto femminile"},
+    "Studio Window":{zh:"画室之窗",it:"Finestra dello studio"},
+    "Upward Gaze":{zh:"仰望",it:"Sguardo verso l’alto"},
+    "Frontal":{zh:"正面",it:"Frontale"},
+    "Ionic Capital":{zh:"爱奥尼柱头",it:"Capitello ionico"},
+    "Restroom":{zh:"卫生间",it:"Bagno"},
+    "Father and Child":{zh:"父与女",it:"Padre e figlia"},
+    "Child in Coat":{zh:"大衣里的孩子",it:"Bambino nel cappotto"},
+    "Self-Portrait Standing":{zh:"站姿自画像",it:"Autoritratto in piedi"},
+    "Black Woman":{zh:"黑人女性",it:"Donna nera"},
+    "Male Bust":{zh:"男性胸像",it:"Busto maschile"},
+    "Ballet Dancer":{zh:"芭蕾舞者",it:"Ballerina"},
+    "Man Leaning Sideways":{zh:"男性侧靠",it:"Uomo appoggiato di lato"},
+    "Apollo":{zh:"阿波罗",it:"Apollo"},
+    "Damoxenos":{zh:"达莫克塞诺斯",it:"Damosseno"},
+    "Male Figure":{zh:"男性身像",it:"Figura maschile"},
+    "Female Seated Leaning":{zh:"女性坐靠",it:"Donna seduta appoggiata"},
+    "Male Portrait":{zh:"男性人像",it:"Ritratto maschile"},
+    "Studies Laid Out":{zh:"习作一览",it:"Studi disposti insieme"},
+    "Four Portrait Studies":{zh:"四联写生",it:"Quattro studi di ritratto"},
+    "Portrait Group":{zh:"人像习作组",it:"Gruppo di studi di ritratto"},
+    "Mixed Studies":{zh:"综合练习",it:"Studi misti"},
+    "Studies Composite":{zh:"习作组合",it:"Studi compositi"},
+    "Graphite":{zh:"石墨",it:"Grafite"},
+    "Charcoal":{zh:"炭笔",it:"Carboncino"},
+    "Charcoal & Graphite":{zh:"炭笔与石墨",it:"Carboncino e grafite"},
+    "Oil":{zh:"油画",it:"Olio"},
+    "Mixed":{zh:"综合材料",it:"Tecnica mista"},
+    "Various Media":{zh:"多种媒介",it:"Tecniche varie"},
+    "3D Modeling":{zh:"三维建模",it:"Modellazione 3D"},
+    "Blender":{zh:"Blender",it:"Blender"},
+    "Photography":{zh:"摄影",it:"Fotografia"},
+    "Rome":{zh:"罗马",it:"Roma"},
+    "ComfyUI":{zh:"ComfyUI",it:"ComfyUI"},
+    "Stable Diffusion":{zh:"Stable Diffusion",it:"Stable Diffusion"},
+    "Poster Design":{zh:"海报设计",it:"Design di poster"},
+    "Folded Posters":{zh:"折叠海报",it:"Poster piegati"},
+    "Book Cover Design":{zh:"书籍封面设计",it:"Design di copertine"},
+    "Photoshop":{zh:"Photoshop",it:"Photoshop"},
+    "Illustrator":{zh:"Illustrator",it:"Illustrator"}
+  };
+  function segTr(seg,lang){
+    var t=seg.trim(), m;
+    if(lang==='en') return t;
+    var d=SEG[t]; if(d && d[lang]) return d[lang];
+    if((m=t.match(/^Age (\d+)$/))) return lang==='zh' ? m[1]+' 岁' : m[1]+' anni';
+    if((m=t.match(/^Ages (\d+)\s*[–-]\s*(\d+)$/))) return lang==='zh' ? m[1]+'–'+m[2]+' 岁' : m[1]+'–'+m[2]+' anni';
+    return t;
+  }
+  function enLine(s,lang){
+    if(!s || lang==='orig' || lang==='en') return s;
+    return s.split(' · ').map(function(x){ return segTr(x,lang); }).join(' · ');
+  }
+
+  /* 灯箱里每件作品的说明文字（按 openLb 的编号） */
+  var DESC={
+    0:{en:"Full-sheet life drawing in graphite, worked on for a month, made at 16. I was drawing seriously back then, and this piece has a secret: do you think David is looking back at you, or gazing past you at what is behind?",it:"Disegno dal vero a foglio intero, in grafite, durato un mese, realizzato a 16 anni. Allora disegnavo con impegno, e quest’opera ha un segreto: secondo te il David ti guarda negli occhi o guarda oltre, dietro di te?"},
+    1:{en:"Quarter-sheet life study in oil — my first oil self-portrait, made at 15, the first time I really looked at myself.",it:"Studio dal vero su quarto di foglio, a olio: il mio primo autoritratto a olio, a 15 anni, la prima volta che mi sono guardato davvero."},
+    2:{en:"Full-sheet life study: an oil portrait of my parents, made at 16, set against the backdrop of my hometown, Zhoushan.",it:"Studio dal vero a foglio intero: ritratto a olio dei miei genitori, a 16 anni, con sullo sfondo la mia città natale, Zhoushan."},
+    3:{en:"Half-sheet pencil portrait study, made at 14, when I started studying structure seriously.",it:"Studio di ritratto a matita su mezzo foglio, a 14 anni, quando ho iniziato a studiare seriamente la struttura."},
+    4:{en:"Half-sheet life study made at 15: the view from the studio window, with lovely light.",it:"Studio dal vero su mezzo foglio, a 15 anni: la vista dalla finestra dello studio, con una bella luce."},
+    5:{en:"Quarter-sheet, mixed media, made at 14: a portrait seen from below, using a blend of materials.",it:"Quarto di foglio, tecnica mista, a 14 anni: un ritratto visto dal basso, con materiali misti."},
+    6:{en:"Full-sheet life study of David from the front, made at 16, drawn in the same period as the side view.",it:"Studio dal vero a foglio intero del David di fronte, a 16 anni, realizzato nello stesso periodo di quello di profilo."},
+    7:{en:"Half-sheet life study made at 14: an architectural detail drawing — the ornament of the capital took a lot of time.",it:"Studio dal vero su mezzo foglio, a 14 anni: disegno di un dettaglio architettonico; la decorazione del capitello ha richiesto molto tempo."},
+    8:{en:"Half-sheet life study made at 15; the light and structure of the restroom turned out to be surprisingly good to draw.",it:"Studio dal vero su mezzo foglio, a 15 anni; la luce e la struttura del bagno si sono rivelate sorprendentemente belle da disegnare."},
+    9:{en:"Quarter-sheet, made at 16: a portrait of my teacher, in which the bond between the two comes through.",it:"Quarto di foglio, a 16 anni: ritratto del mio maestro, in cui si legge il legame tra i due."},
+    10:{en:"Quarter-sheet, pencil, made at 15: a child curled up inside a coat — the atmosphere is right.",it:"Quarto di foglio, matita, a 15 anni: un bambino rannicchiato nel cappotto; l’atmosfera è quella giusta."},
+    11:{en:"Quarter-sheet full-length self-portrait, made at 15; the composition took quite a while.",it:"Autoritratto a figura intera su quarto di foglio, a 15 anni; la composizione ha richiesto parecchio tempo."},
+    12:{en:"Quarter-sheet charcoal portrait, made at 14; the skin texture comes from handling light and shade — I had just started learning.",it:"Ritratto a carboncino su quarto di foglio, a 14 anni; la texture della pelle nasce dal chiaroscuro: avevo appena iniziato a imparare."},
+    13:{en:"Quarter-sheet life study in pencil, made at 16: a male bust.",it:"Studio dal vero su quarto di foglio, a matita, a 16 anni: un busto maschile."},
+    14:{en:"Quarter-sheet full-figure life study, made at 16: a dynamic pose.",it:"Studio dal vero a figura intera su quarto di foglio, a 16 anni: una posa dinamica."},
+    15:{en:"Quarter-sheet life study made at 16; the sideways lean makes the twisting lines of the body more visible.",it:"Studio dal vero su quarto di foglio, a 16 anni; la posa appoggiata di lato rende più evidenti le linee di torsione del corpo."},
+    16:{en:"Quarter-sheet plaster cast study, made at 16: a classic cast.",it:"Studio di gesso su quarto di foglio, a 16 anni: un classico calco in gesso."},
+    17:{en:"Quarter-sheet plaster cast study, made at 16: a classic cast.",it:"Studio di gesso su quarto di foglio, a 16 anni: un classico calco in gesso."},
+    18:{en:"Quarter-sheet life study made at 16: an exercise in overall form.",it:"Studio dal vero su quarto di foglio, a 16 anni: esercizio sulla forma d’insieme."},
+    19:{en:"Quarter-sheet life study in pencil, made at 16: a seated woman leaning to one side.",it:"Studio dal vero su quarto di foglio, a matita, a 16 anni: una donna seduta appoggiata di lato."},
+    20:{en:"Quarter-sheet charcoal life study, made at 16: the head of a man wearing an earring.",it:"Studio dal vero a carboncino su quarto di foglio, a 16 anni: la testa di un uomo con un orecchino."},
+    21:{en:"Quarter-sheet, made at ages 14–16: several years of studies laid out together and photographed — it makes me a little wistful to look at.",it:"Quarto di foglio, tra i 14 e i 16 anni: studi di diversi anni disposti insieme e fotografati; guardarli mi mette un po’ di nostalgia."},
+    22:{en:"Quarter-sheet, made at 16: four life studies put together, each done in about two hours or less.",it:"Quarto di foglio, a 16 anni: quattro studi dal vero messi insieme, ciascuno eseguito in circa due ore o meno."},
+    23:{en:"Eighth-sheet, made at 14: a collection of portrait studies in different media, both charcoal and pencil.",it:"Ottavo di foglio, a 14 anni: raccolta di studi di ritratto in tecniche diverse, carboncino e matita."},
+    24:{en:"Quarter-sheet, made at 14: a phase of practice mixing all kinds of media — I tried a bit of everything.",it:"Quarto di foglio, a 14 anni: una fase di esercizi con tecniche miste; ho provato un po’ di tutto."},
+    25:{en:"Quarter-sheet, made at ages 13–14: the earliest batch of charcoal studies — this is where it began.",it:"Quarto di foglio, tra i 13 e i 14 anni: i primi studi a carboncino; è da qui che tutto è iniziato."},
+
+    100:{en:"A modeled scene of an ancient Greek temple — pretty good in itself.",it:"Scena modellata di un tempio greco antico; di per sé niente male."},
+    101:{en:"A cyberpunk-style city scene, built fast — finished within 3 days.",it:"Scena urbana in stile cyberpunk, realizzata in fretta: finita in 3 giorni."},
+    102:{en:"A modeled basement space with a strong atmosphere.",it:"Modellazione di uno spazio sotterraneo, con una forte atmosfera."},
+    103:{en:"A modeled Buddha scene, with a hint of Wukong about it.",it:"Scena modellata con una statua del Buddha, con un tocco di Wukong."},
+    104:{en:"Nemeton, a Celtic sacred grove scene, inspired by Nordic landscapes.",it:"Nemeton, scena di un bosco sacro celtico, ispirata ai paesaggi nordici."},
+    105:{en:"A modeled tabletop still life.",it:"Modellazione di una natura morta da tavolo."},
+    106:{en:"An aurora scene, very romantic.",it:"Scena con aurora boreale, molto romantica."},
+    107:{en:"A modeled scene of the journey home.",it:"Scena modellata del viaggio di ritorno."},
+    108:{en:"A modeled city scene.",it:"Modellazione di una scena urbana."},
+    120:{en:"A modeled subway station scene — an experiment.",it:"Scena modellata di una stazione della metropolitana: un tentativo."},
+    129:{en:"A modeled snowy-night scene — an experiment.",it:"Scena modellata di una notte di neve: un tentativo."},
+    124:{en:"A black hole space scene, feeling my way around the scale of the universe.",it:"Scena cosmica con un buco nero, per esplorare la scala dell’universo."},
+    125:{en:"A modeled Earth scene — vast and quiet at once.",it:"Scena modellata della Terra: vasta e silenziosa insieme."},
+    121:{en:"Course assignment modeling exercise: a Chinese residential building from the 2000s.",it:"Esercizio di modellazione per un corso: un edificio residenziale cinese degli anni 2000."},
+    122:{en:"Course assignment modeling exercise: a Chinese residential building from the 2000s.",it:"Esercizio di modellazione per un corso: un edificio residenziale cinese degli anni 2000."},
+    123:{en:"Course assignment modeling exercise: a Chinese residential building from the 2000s.",it:"Esercizio di modellazione per un corso: un edificio residenziale cinese degli anni 2000."},
+    126:{en:"Product modeling and rendering.",it:"Modellazione e rendering di un prodotto."},
+    127:{en:"Product modeling and rendering.",it:"Modellazione e rendering di un prodotto."},
+    128:{en:"Product modeling.",it:"Modellazione di un prodotto."},
+
+    200:{en:"Shot on a Nikon D90 with an 18-105 VR lens, on the streets of Rome: a girl sitting on a bus.",it:"Scattata con Nikon D90 + 18-105 VR, per le strade di Roma: una ragazza seduta su un autobus."},
+    201:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a flower cart by the roadside.",it:"Scattata con Nikon D90 + 18-105 VR: un carretto di fiori sul ciglio della strada."},
+    202:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a tree, with some inconspicuous things hidden in it.",it:"Scattata con Nikon D90 + 18-105 VR: un albero, con dentro qualcosa di poco appariscente."},
+    203:{en:"Shot on a Nikon D90 with an 18-105 VR lens, framed in the subway.",it:"Scattata con Nikon D90 + 18-105 VR, inquadratura nella metropolitana."},
+    204:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a street.",it:"Scattata con Nikon D90 + 18-105 VR: una strada."},
+    205:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a station.",it:"Scattata con Nikon D90 + 18-105 VR: una stazione."},
+    206:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a kidnapping by restraint.",it:"Scattata con Nikon D90 + 18-105 VR: un rapimento per costrizione."},
+    207:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a sign.",it:"Scattata con Nikon D90 + 18-105 VR: un cartello."},
+    208:{en:"Shot on a Nikon D90 with an 18-105 VR lens: a billboard.",it:"Scattata con Nikon D90 + 18-105 VR: un cartellone pubblicitario."},
+
+    300:{en:"A convenience store on a rainy night; the result feels very soothing.",it:"Un minimarket in una notte di pioggia; l’effetto è molto rilassante."},
+    301:{en:"A beach generation, fairly orderly.",it:"Immagine generata di una spiaggia, piuttosto ordinata."},
+    302:{en:"A gathering scene with just the right atmosphere.",it:"Scena di raccolta, con l’atmosfera giusta."},
+    303:{en:"A fishing ground scene.",it:"Scena di una zona di pesca."},
+    304:{en:"A rescue scene.",it:"Scena di soccorso."},
+    305:{en:"A street scene.",it:"Scena di strada."},
+    306:{en:"A city scene.",it:"Scena urbana."},
+    307:{en:"A gathering-site scene.",it:"Scena di un luogo di raccolta."},
+    308:{en:"A subway scene.",it:"Scena di metropolitana."},
+    309:{en:"A forest scene.",it:"Scena di foresta."},
+
+    400:{en:"Nothing much to say — it is just an experiment.",it:"Non c’è molto da dire: è solo un esperimento."},
+    401:{en:"Another experiment.",it:"Un altro esperimento."},
+    402:{en:"The assets were all generated by Gemini; I just cut them out and went to town on them.",it:"Tutti i materiali sono stati generati da Gemini; io mi sono limitato a ritagliarli e a lavorarci sopra a modo mio."},
+    403:{en:"These assets were also generated by Gemini; again I just cut them out and went to town on them.",it:"Anche questi materiali sono stati generati da Gemini; anche qui mi sono limitato a ritagliarli e a lavorarci sopra."},
+    404:{en:"Same here: the assets come from Gemini, then I cut them out and went to town on them.",it:"Anche qui i materiali vengono da Gemini; poi li ho ritagliati e ci ho lavorato sopra."},
+    405:{en:"Likewise, the assets come from Gemini, then I cut them out and went to town on them.",it:"Allo stesso modo, i materiali vengono da Gemini; poi li ho ritagliati e ci ho lavorato sopra."},
+    406:{en:"Roman architecture, reopened.",it:"L’architettura romana riapre."},
+    407:{en:"Roman architecture, reopened.",it:"L’architettura romana riapre."},
+    410:{en:"The background was generated in Processing, then brought into Photoshop to finish.",it:"Lo sfondo è stato generato con Processing, poi rifinito in Photoshop."},
+    411:{en:"The background was generated in Processing, then brought into Photoshop to finish.",it:"Lo sfondo è stato generato con Processing, poi rifinito in Photoshop."},
+    412:{en:"The background was generated in Processing, then brought into Photoshop to finish.",it:"Lo sfondo è stato generato con Processing, poi rifinito in Photoshop."},
+    413:{en:"The background was generated in Processing, then brought into Photoshop to finish.",it:"Lo sfondo è stato generato con Processing, poi rifinito in Photoshop."}
+  };
+  for(var pi=420;pi<=429;pi++) DESC[pi]={en:"Folded poster design.",it:"Design di poster piegato."};
+
+  /* 把所有卡片上的英文副标题登记进词典（页面加载时只跑一次，此时尚未被翻译） */
+  document.querySelectorAll('.gi-en,.gi1-en').forEach(function(el){
+    var k=el.textContent.replace(/\s+/g,' ').trim();
+    if(!k || DICT[k]) return;
+    DICT[k]={en:k,zh:enLine(k,'zh'),it:enLine(k,'it')};
+  });
+
   var LANGS=[
     {id:'orig',label:'LANG',name:'Original',code:'原版'},
     {id:'zh',label:'ZH',name:'中文',code:'ZH'},
@@ -7052,7 +7227,7 @@ document.addEventListener('click',function(e){
     var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
       var p=n.parentNode; if(!p) return NodeFilter.FILTER_REJECT;
       var t=p.nodeName; if(t==='SCRIPT'||t==='STYLE'||t==='NOSCRIPT') return NodeFilter.FILTER_REJECT;
-      if(p.closest && p.closest('.ph-t,.lang-btn,.lang-menu')) return NodeFilter.FILTER_REJECT;
+      if(p.closest && p.closest('.ph-t,.lang-btn,.lang-menu,.lb-side')) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }});
     var n, list=[]; while((n=w.nextNode())) list.push(n);
@@ -7197,10 +7372,33 @@ document.addEventListener('click',function(e){
     });
   }
 
+  /* 灯箱开着时切换语言：标题 / 副标题 / 介绍就地淡出 → 换字 → 淡入 */
+  function refreshLb(animate){
+    if(!window._lbOpen || typeof META==='undefined' || typeof curLbIdx==='undefined') return;
+    var raw=META[curLbIdx]; if(!raw) return;
+    var d=window.JHLang.work(raw,curLbIdx);
+    var els=[document.getElementById('lbTitle'),document.getElementById('lbEn'),document.getElementById('lbDesc')];
+    var txt=[d.title,d.en,(d.desc||'').replace(/\n\n/g,'\n')];
+    function put(){ els.forEach(function(el,i){ if(el) el.textContent=txt[i]; }); }
+    if(!animate || !els[0] || !els[0].animate || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)){ put(); return; }
+    var n=els.length, outs=[];
+    els.forEach(function(el,i){
+      var a=el.animate([{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(4px)'}],{duration:220,delay:i*30,easing:'cubic-bezier(.4,0,.7,1)',fill:'forwards'});
+      outs.push(a);
+      a.onfinish=function(){
+        if(--n) return;
+        put();
+        outs.forEach(function(o){ try{o.cancel();}catch(e){} });
+        els.forEach(function(e2,j){ e2.animate([{opacity:0,filter:'blur(5px)'},{opacity:1,filter:'blur(0px)'}],{duration:620,delay:j*50,easing:'cubic-bezier(.16,1,.3,1)',fill:'backwards'}); });
+      };
+    });
+  }
+  window.JHLang_refreshLb=refreshLb;
+
   function labelFor(id){ for(var i=0;i<LANGS.length;i++) if(LANGS[i].id===id) return LANGS[i].label; return 'LANG'; }
 
   function setLang(id,save){
-    cur=id; apply(id,save);
+    cur=id; apply(id,save); refreshLb(save);
     document.querySelectorAll('.lang-btn .lang-cur').forEach(function(el){
       el.textContent=labelFor(id);
       if(save && el.animate) el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:480,easing:'cubic-bezier(.32,.72,0,1)'});
@@ -7326,7 +7524,15 @@ document.addEventListener('click',function(e){
 
   var saved='orig'; try{saved=localStorage.getItem('jh-lang')||'orig';}catch(e){}
   if(saved!=='orig') setLang(saved,false);
-  window.JHLang={set:function(id){setLang(id,true);},refresh:function(){apply(cur);}};
+  window.JHLang={set:function(id){setLang(id,true);},refresh:function(){apply(cur);},
+    work:function(d,idx){
+      if(!d || cur==='orig') return d;
+      var o={title:d.title,en:d.en,desc:d.desc};
+      var t=DICT[norm(d.title||'')]; if(t && t[cur]) o.title=t[cur];
+      o.en=enLine(d.en,cur);
+      var x=DESC[idx]; if(x && x[cur]) o.desc=x[cur];
+      return o;
+    }};
 })();
 </script>
 </body>
