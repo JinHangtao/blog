@@ -1485,6 +1485,29 @@ button, a, input, label, [onclick], video {
   }
 }
 
+/* ── 文章共享元素过渡：从被点的卡片展开 / 收回（与灯箱同一缓动与时长）──
+   飞行期间：面板自身底色与磨砂撤掉，由 ::before 的纯色层按 --art-bg 渐显把卡片盖住，
+   正文区按 --art-c 渐显；结束后 .art-settle 让纯色层淡出、磨砂底色平滑接管。 */
+#articleOverlay:focus{outline:none}
+#articleOverlay.art-flying{
+  background:transparent !important;
+  -webkit-backdrop-filter:none !important;
+  backdrop-filter:none !important;
+  border-color:transparent !important;
+  transition:none !important;
+  pointer-events:none !important;
+  will-change:clip-path;
+}
+#articleOverlay.art-flying #artTopbar,
+#articleOverlay.art-flying #artScroll{opacity:var(--art-c,0);}
+#articleOverlay.art-flying::before,
+#articleOverlay.art-settle::before{
+  content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:rgb(19,18,16);opacity:var(--art-bg,1);
+}
+#articleOverlay.art-settle::before{opacity:0;transition:opacity .24s ease;}
+@media(prefers-reduced-motion:reduce){#articleOverlay.art-settle::before{transition-duration:.01s}}
+
 /* ── 顶部进度条 ── */
 #artProgress{
   position:absolute;
@@ -6388,10 +6411,132 @@ function doCopy(btn){
     }
   }
 
+  // ══ 文章共享元素过渡（FLIP 的「窗口」版）══
+  // 和灯箱同一套手感：同一条缓动曲线（直接复用 _lbEaseFn）、同样的时长（开 440ms / 关 300ms）、
+  // 同样的「被 tab 栏遮住的部分钻出来 / 钻回去」窗口、同样的飞行期间锁滚动。
+  // 区别只在于：灯箱飞的是一张图，这里飞的是整块文章面板 —— 面板用 clip-path 从被点击卡片的矩形
+  // 平滑展开到整个文章区域，关闭时反向收回那张卡片。卡片本身始终留在下面不动，
+  // 面板底色渐显把它盖住（= 卡片「长成」文章）；找不到卡片 / 开了「减少动态效果」时退回原来的淡入淡出。
+  var ART_IN = 440, ART_OUT = 300;
+  var ART_EASE = (typeof _lbEaseFn === 'function') ? _lbEaseFn
+               : function(x){ return x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 3); };
+  var artFlight = null, artSettleTimer = 0, artOpener = null;
+
+  function artSmooth(x){ x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
+  function artReduced(){ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+
+  // 卡片「看得见」的那一块（去掉被 tab 栏 / 容器边缘遮住的部分）；看不见就返回 null → 走淡入淡出
+  function artCardInfo(id){
+    var card = id ? document.getElementById('post-' + id) : null;
+    if(!card) return null;
+    var r = card.getBoundingClientRect();
+    if(r.width < 8 || r.height < 8) return null;
+    var m  = document.querySelector('.main'), tb = document.querySelector('.topbar');
+    var mr = m ? m.getBoundingClientRect() : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
+    var w  = { l: Math.max(mr.left, 0), r: Math.min(mr.right, window.innerWidth),
+               t: Math.max(mr.top, tb ? tb.getBoundingClientRect().bottom : 0, 0),
+               b: Math.min(mr.bottom, window.innerHeight) };
+    var v  = { l: Math.max(r.left, w.l), r: Math.min(r.right, w.r), t: Math.max(r.top, w.t), b: Math.min(r.bottom, w.b) };
+    if(v.r - v.l < 24 || v.b - v.t < 24) return null;
+    return { v: v, radius: parseFloat(getComputedStyle(card).borderTopLeftRadius) || 0, card: card };
+  }
+
+  function artStopFlight(){
+    var f = artFlight; if(!f) return null;
+    artFlight = null;
+    if(f.raf) cancelAnimationFrame(f.raf);
+    f.unlock();
+    window._lbFlying = false;
+    return f;
+  }
+  function artClearFx(){
+    overlay.style.clipPath = '';
+    overlay.style.removeProperty('--art-bg');
+    overlay.style.removeProperty('--art-c');
+  }
+  // 立刻收成「已关闭」（不播动画）：被打断 / 无动画路径共用
+  function artHardClose(){
+    artStopFlight();
+    if(artSettleTimer){ clearTimeout(artSettleTimer); artSettleTimer = 0; }
+    overlay.style.transition = 'none';                 // 否则 art-on 摘掉后会再淡出 .35s，露出已复位的内容
+    overlay.classList.remove('art-flying', 'art-settle', 'art-on');
+    overlay.setAttribute('aria-hidden', 'true');
+    artClearFx();
+    overlay.style.transform = '';
+    overlay.style.opacity   = '';
+    void overlay.offsetWidth;
+    overlay.style.transition = '';
+    window._lbFlying = false;
+  }
+  function artOpenDone(){
+    artClearFx();
+    overlay.classList.remove('art-flying');
+    overlay.classList.add('art-settle');               // 纯色层淡出，磨砂底色平滑接管
+    artSettleTimer = setTimeout(function(){ artSettleTimer = 0; overlay.classList.remove('art-settle'); }, 280);
+  }
+
+  // 一次飞行。dir: 'in' 展开 / 'out' 收回；u0 / k0 = 起始进度（被打断时从当前姿态接着飞，不跳变）
+  function artFly(dir, info, u0, k0, done){
+    artStopFlight();
+    if(artSettleTimer){ clearTimeout(artSettleTimer); artSettleTimer = 0; }
+    overlay.classList.remove('art-settle');
+    overlay.classList.add('art-flying');
+    var O = overlay.getBoundingClientRect(), v = info.v;
+    var s = [v.t - O.top, O.right - v.r, O.bottom - v.b, v.l - O.left];      // 卡片可见矩形相对面板的 inset
+    var R0 = info.radius, R1 = parseFloat(getComputedStyle(overlay).borderTopLeftRadius) || 0;
+    var target = dir === 'in' ? 1 : 0, dur = dir === 'in' ? ART_IN : ART_OUT;
+
+    // 飞行期间锁滚动（与灯箱一致：事件拦截，不改 overflow，布局不会位移）
+    function stopWheel(e){ if(e.ctrlKey) return; if(e.cancelable) e.preventDefault(); }
+    var keys = { 32: 1, 33: 1, 34: 1, 35: 1, 36: 1, 38: 1, 40: 1 };
+    function stopKey(e){ if(keys[e.keyCode]) e.preventDefault(); }
+    window.addEventListener('wheel',     stopWheel, { passive: false, capture: true });
+    window.addEventListener('touchmove', stopWheel, { passive: false, capture: true });
+    window.addEventListener('keydown',   stopKey,   { passive: false, capture: true });
+    var f = { dir: dir, u: u0, k: k0, raf: 0, unlock: function(){
+      window.removeEventListener('wheel',     stopWheel, { capture: true });
+      window.removeEventListener('touchmove', stopWheel, { capture: true });
+      window.removeEventListener('keydown',   stopKey,   { capture: true });
+    }};
+
+    var t0 = 0;
+    function frame(now){
+      f.raf = 0;
+      if(artFlight !== f) return;
+      if(!t0) t0 = now;
+      var p = Math.min(1, Math.max(0, (now - t0) / dur));
+      var u = u0 + (target - u0) * ART_EASE(p);        // 窗口位置：与灯箱同一条缓动
+      var k = k0 + (target - k0) * p;                  // 底色 / 正文渐显：线性时间，更柔
+      f.u = u; f.k = k;
+      var q = 1 - u;
+      overlay.style.clipPath = 'inset(' + (s[0] * q).toFixed(2) + 'px ' + (s[1] * q).toFixed(2) + 'px ' +
+                               (s[2] * q).toFixed(2) + 'px ' + (s[3] * q).toFixed(2) + 'px round ' +
+                               (R0 + (R1 - R0) * u).toFixed(2) + 'px)';
+      overlay.style.setProperty('--art-bg', artSmooth(k / .2).toFixed(3));          // 底色先盖住卡片，避免两层文字叠在一起
+      overlay.style.setProperty('--art-c',  artSmooth((k - .16) / .5).toFixed(3));  // 正文随后渐显
+      if(p >= 1){ artFlight = null; f.unlock(); window._lbFlying = false; done(); return; }
+      f.raf = requestAnimationFrame(frame);
+    }
+    artFlight = f;
+    window._lbFlying = true;                           // 让滚动模糊等主线程任务让路（同灯箱）
+    frame(performance.now());                          // 第一帧同步写入，不会闪一下终态
+    return f;
+  }
+
   // ── 打开 ──
-  window.openArticle = function(id){
+  window.openArticle = function(id, noHash){
     if(!loaded){ pending = id; return; }
     if(!ARTICLES[id]) return;
+
+    // 正在收回时又被点开：直接收成已关闭，再按全新打开处理
+    if(artFlight && artFlight.dir === 'out') artHardClose();
+
+    var wasOn = overlay.classList.contains('art-on');
+    var info  = (!wasOn && !artReduced()) ? artCardInfo(id) : null;     // 必须在面板出现、锁滚动之前量
+    if(!wasOn){
+      var ae = document.activeElement;
+      artOpener = (ae && ae.classList && ae.classList.contains('blog-post-clickable')) ? ae : document.getElementById('post-' + id);
+    }
 
     // 重置上一篇文章可能残留的贴底状态，避免短暂闪烁
     var prevCommentRow = document.getElementById('artCommentRow');
@@ -6402,22 +6547,25 @@ function doCopy(btn){
     artProgress.style.width = '0%';
     overlay.style.transform = '';
     overlay.style.opacity   = '';
+    if(info) artFly('in', info, 0, 0, artOpenDone);    // 先把窗口设到卡片位置，再显示面板
     overlay.classList.add('art-on');
     overlay.setAttribute('aria-hidden','false');
     // 锁住背景滚动（移动端防穿透）
     document.body.style.overflow = 'hidden';
-    setHash(id);
+    if(!noHash) setHash(id);
+    if(!wasOn){                                        // 键盘焦点进入文章；关闭时回到原卡片
+      overlay.setAttribute('tabindex', '-1');
+      try{ overlay.focus({ preventScroll: true }); }catch(e){}
+    }
 
-
-
-    // overlay transition = 350ms，等完毕再播内容动画
+    // 有飞行：面板展开到约三成时就开始逐段入场；没有飞行：等原来的 350ms 淡入完毕
     setTimeout(function(){
       artContent.querySelectorAll('.art-reveal').forEach(function(el, i){
         setTimeout(function(){ el.classList.add('in'); }, i * 55);
       });
       // 内容动画播完、布局稳定后，检查文章是否短到没有滚动空间
       checkAutoExpandComment();
-    }, 370);
+    }, info ? 140 : 370);
   };
 
   // ── 切换语言（接入主页同一套动画：淡出虚化 → 换字 → 由虚到实 + 版面 FLIP 滑动）──
@@ -6525,10 +6673,13 @@ function doCopy(btn){
   }};
 
   // ── 关闭 ──
-  window.closeArticle = function(){
-    var mainEl = document.querySelector('.main') || document.body;
-    overlay.classList.remove('art-on');
-    overlay.setAttribute('aria-hidden','true');
+  function doClose(fromPop){
+    if(artFlight && artFlight.dir === 'out') return;                    // 已经在收回了
+    var mainEl  = document.querySelector('.main') || document.body;
+    var wasOn   = overlay.classList.contains('art-on');
+    var id      = currentId;
+    var running = artFlight;                                            // 展开飞行中被关：从当前姿态直接收回
+    var info    = (wasOn && !artReduced()) ? artCardInfo(id) : null;    // 必须在恢复滚动之前量
     // 恢复背景滚动
     document.body.style.overflow = '';
     // 清理手势残留
@@ -6537,12 +6688,47 @@ function doCopy(btn){
     overlay.style.transition = '';
     mainEl.style.transform  = '';
     mainEl.style.transition = '';
-    setHash(null);
+    if(!fromPop) setHash(null);                                         // 浏览器返回键触发的关闭，历史已经退过了，不再改写
     currentId = null;
-    setTimeout(function(){ artContent.innerHTML = ''; }, 400);
+    overlay.setAttribute('aria-hidden','true');
+
+    if(info){
+      artFly('out', info, running ? running.u : 1, running ? running.k : 1, function(){
+        artHardClose();
+        artContent.innerHTML = '';
+        if(artOpener && document.body.contains(artOpener)){
+          try{ artOpener.focus({ preventScroll: true }); }catch(e){}
+        }
+        artOpener = null;
+      });
+    } else {
+      if(artFlight || overlay.classList.contains('art-flying') || overlay.classList.contains('art-settle')){
+        artHardClose();                                                 // 飞行途中卡片已不可见：直接收掉
+      } else {
+        overlay.classList.remove('art-on');                             // 原来的 CSS 淡出
+      }
+      setTimeout(function(){ artContent.innerHTML = ''; }, 400);
+      if(artOpener && document.body.contains(artOpener)){
+        try{ artOpener.focus({ preventScroll: true }); }catch(e){}
+      }
+      artOpener = null;
+    }
     // 通知其他模块（如分享弹窗）文章已关闭
     document.dispatchEvent(new CustomEvent('articleClose'));
-  };
+  }
+  window.closeArticle = function(){ doClose(false); };
+
+  // 浏览器返回 / 前进：文章历史与浮层保持一致（手机返回键 = 关闭文章，而不是把整个页面退走）
+  window.addEventListener('popstate', function(){
+    var m = /^#blog-(.+)$/.exec(location.hash);
+    var open = overlay.classList.contains('art-on') && !(artFlight && artFlight.dir === 'out');
+    if(m){
+      var pid = decodeURIComponent(m[1]);
+      if(ARTICLES[pid] && (!open || pid !== currentId)) window.openArticle(pid, true);
+    } else if(open){
+      doClose(true);
+    }
+  });
 
   // ── 阅读进度 + 评论输入框贴底 ──
   // 1) 用滞后区间(hysteresis)代替单一阈值，避免在临界点附近小幅滚动时
