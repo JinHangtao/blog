@@ -3152,8 +3152,11 @@ if(isTouch){
     topbar.style.willChange = 'background,backdrop-filter';   // 只在渐变期间提升合成层
     requestAnimationFrame(frame);
   }
-  mainEl.addEventListener('scroll', kick, {passive:true});
-  document.addEventListener('panelChanged', kick);
+  // 入场动画期间原本不启动；但用户一旦开始滚动（例如刚进站就点 tab 往下翻），
+  // 必须立刻启动，否则 Type 栏会一直是透明的，直到 intro-done / 4.5s 兜底
+  function onScroll(){ if(!started) start(); kick(); }
+  mainEl.addEventListener('scroll', onScroll, {passive:true});
+  document.addEventListener('panelChanged', function(){ if(!started && mainEl.scrollTop > 0) start(); kick(); });
 
   // 入场动画期间不启动，等 intro-done 再开始（兜底 4.5s）
   var root = document.documentElement;
