@@ -2362,6 +2362,23 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
   .main,#articleOverlay{ box-shadow:0 24px 60px -30px rgba(0,0,0,.8); }
 }
 </style>
+<style id="card-rim">
+/* 帖子卡片：只改颜色，不加伪元素 / 遮罩 / 阴影层，避免影响切换页面时的合成与动画 */
+.blog-post{
+  border-color:rgba(255,240,205,.075);
+  box-shadow:inset 0 1px 0 rgba(255,244,214,.03);
+}
+@media(hover:hover){
+  .blog-post:hover{
+    border-width:1px;                      /* 原来 hover 会变 0.5px，粗细不一致 */
+    border-color:rgba(196,154,82,.24);
+  }
+}
+@media(max-width:768px){
+  .blog-post:hover{border-color:rgba(255,240,205,.075)}
+}
+</style>
+
 </head>
 <body class="is-loading">
 <canvas id="starsBg"></canvas>
