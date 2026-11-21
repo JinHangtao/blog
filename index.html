@@ -2326,7 +2326,7 @@ function rippleThen(e,el,id){
       oldPanel.style.opacity='';
       newPanel.style.opacity='0';
       newPanel.style.transition='none';
-      newPanel.classList.add('on');
+      newPanel.classList.add('on');if(newPanel.id==='p-blog'){if(window.applyBlogCollapse)window.applyBlogCollapse(newPanel);if(window._applyBlogBodyGradients)window._applyBlogBodyGradients(newPanel);}
       requestAnimationFrame(function(){
         requestAnimationFrame(function(){
           newPanel.style.transition='opacity .7s cubic-bezier(.25,.8,.25,1)';
@@ -2349,17 +2349,60 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
 }
 </style>
 <style id="modern-panels">
-/* ══ 最外层区块光边：只改这一圈，其余保持原样 ══
-   想回原样：删掉这整段 <style id="modern-panels"> 即可
-   --edge 越接近卡片底色，光边越隐形（卡片底色约 #141312） */
-:root{ --edge:#1e1c1a; }
+/* ═══════════════════════════════════════════════════════════
+   MODERN EDGES · 光边覆盖层（想回原样：删掉整段本 <style> 即可）
+   原则：边框宽度/颜色永远不变 → 不触发重排、不抖动；
+        悬停效果只用 opacity + transform（合成层动画）→ 丝滑
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --edge:#1e1c1a;        /* 外层大区块光边（越接近卡片底色 #141312 越隐形） */
+  --edge-post:#292724;   /* 帖子卡片光边：比外层略清楚。更清楚→调亮，如 #302d2a */
+  --ease-soft:cubic-bezier(.32,.72,0,1);
+}
 
-.sb-card,.main,#articleOverlay{ border-color:var(--edge); }
-.sb::before,.sb::after{ border-color:var(--edge); }
-
-/* 仅给大面板一点向外的柔影代替硬线来拉开层次（侧栏被 clip-path 裁切，不加） */
+/* ── 1. 外层大区块：侧栏 / 主内容区 / 文章浮层 ── */
+.sb-card,.main,#articleOverlay,.sb::before,.sb::after{ border-color:var(--edge); }
 @media(min-width:769px){
   .main,#articleOverlay{ box-shadow:0 24px 60px -30px rgba(0,0,0,.8); }
+}
+
+/* ── 2. 帖子里的其他矩形 ── */
+.blog-cover-video-frame,.art-next,.quote-box{ border-color:var(--edge); }
+.quote-box{ border-left-color:var(--gold); }
+.blog-post input,.art-comment-input,#articleOverlay input{ border-color:var(--edge) !important; }
+.blog-post:hover .blog-cover-video-frame{ border-color:var(--edge); }
+
+/* ── 3. 帖子卡片 ── */
+.blog-post,
+.blog-post:hover{
+  border-width:1px;                      /* 原悬停会变 .5px 造成边缘抖动，固定住 */
+  border-color:var(--edge-post);         /* 边线颜色全程不变，不做 border 动画 */
+}
+.blog-post{
+  /* 顶边一线淡高光，提示边缘位置（去掉了大范围外阴影，减少重绘） */
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055);
+  transition:transform .5s var(--ease-soft);
+}
+/* 悬停光边：画在伪元素上，只淡入淡出（opacity），不改边框 */
+.blog-post::after{
+  inset:-1px;                            /* 盖住 1px 边框，贴着外缘 */
+  border-radius:inherit;
+  box-shadow:inset 0 0 0 1px rgba(196,154,82,.26), 0 12px 32px -14px rgba(0,0,0,.7);
+  opacity:0;
+  transition:opacity .5s var(--ease-soft);
+  transition-delay:0s;
+}
+@media(hover:hover){
+  .blog-post:hover{
+    transform:translateY(-2px);          /* 整数像素位移，文字不发虚 */
+    transition:transform .5s var(--ease-soft);
+    transition-delay:0s;
+  }
+  .blog-post:hover::after{ opacity:1; transition-delay:0s; }
+}
+@media(prefers-reduced-motion:reduce){
+  .blog-post,.blog-post::after{ transition-duration:.01s; }
+  .blog-post:hover{ transform:none; }
 }
 </style>
 </head>
@@ -3338,7 +3381,7 @@ function show(id,el){
       newPanel.style.transform='';
       if(!_isTouch) newPanel.style.transform='translateY(18px)';
       newPanel.style.transition='none';
-      newPanel.classList.add('on');
+      newPanel.classList.add('on');if(newPanel.id==='p-blog'){if(window.applyBlogCollapse)window.applyBlogCollapse(newPanel);if(window._applyBlogBodyGradients)window._applyBlogBodyGradients(newPanel);}
       if(main)main.scrollTop=0;
       requestAnimationFrame(function(){
         requestAnimationFrame(function(){
@@ -3364,7 +3407,7 @@ function show(id,el){
     newPanel.style.opacity='0';
     newPanel.style.transform= _isTouch2 ? '' : 'translateY(18px)';
     newPanel.style.transition='none';
-    newPanel.classList.add('on');
+    newPanel.classList.add('on');if(newPanel.id==='p-blog'){if(window.applyBlogCollapse)window.applyBlogCollapse(newPanel);if(window._applyBlogBodyGradients)window._applyBlogBodyGradients(newPanel);}
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){
         newPanel.style.transition= _isTouch2 ? 'opacity .55s cubic-bezier(.25,.8,.25,1)' : 'opacity .55s cubic-bezier(.25,.8,.25,1), transform .55s cubic-bezier(.25,.8,.25,1)';
@@ -5315,7 +5358,7 @@ function triggerStmtPoem(){
       newPanel.style.transform='';
       newPanel.style.filter='blur(calc(var(--blur-in) * 1.2))';
       newPanel.style.transition='none';
-      newPanel.classList.add('on');
+      newPanel.classList.add('on');if(newPanel.id==='p-blog'){if(window.applyBlogCollapse)window.applyBlogCollapse(newPanel);if(window._applyBlogBodyGradients)window._applyBlogBodyGradients(newPanel);}
 
       requestAnimationFrame(function(){
         requestAnimationFrame(function(){
