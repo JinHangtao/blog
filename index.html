@@ -995,9 +995,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-btns button:active{border-color:var(--gold);color:var(--gold);}
 
 .blog-list{display:flex;flex-direction:column;gap:20px}
-.blog-post-clickable{cursor:pointer}
+/* 帖子可点击；隐藏系统原生光标，统一使用页面自带的自定义光标（触屏设备由全局规则保持 auto） */
+.blog-post-clickable,
+.blog-post-clickable .blog-comments{cursor:none}
 .blog-post-clickable:focus-visible{outline:1px solid rgba(196,154,82,.5);outline-offset:2px}
-.blog-post-clickable .blog-comments{cursor:auto}
 .blog-post{
   background:var(--card2);
   border:1px solid var(--line2);
