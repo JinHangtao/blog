@@ -442,6 +442,37 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 }
 .sb::-webkit-scrollbar{width:0}
 
+/* 侧栏：保持整列一起滚动（和原来一样），但整列被裁成一个圆角矩形窗口，
+   上下边缘各有一条固定的圆角边框，内容从圆角边框里滑进滑出 */
+.sb{
+  clip-path:inset(0 round var(--r));
+  overscroll-behavior:contain;
+  scrollbar-width:none;
+}
+.sb::before,.sb::after{
+  content:"";
+  flex:none;
+  position:sticky;
+  height:var(--r);
+  border:1px solid var(--line2);
+  pointer-events:none;
+  z-index:5;
+}
+/* 顶边：贴在可视区顶部，向下覆盖第一张卡的上缘 */
+.sb::before{
+  top:0;
+  border-bottom:0;
+  border-radius:var(--r) var(--r) 0 0;
+  margin-bottom:calc(var(--r) * -1 - 8px);
+}
+/* 底边：贴在可视区底部，向上覆盖最后一张卡的下缘 */
+.sb::after{
+  bottom:0;
+  border-top:0;
+  border-radius:0 0 var(--r) var(--r);
+  margin-top:calc(var(--r) * -1 - 8px);
+}
+
 .sb-card{background:var(--card);border:1px solid var(--line2);border-radius:var(--r);}
 
 .sb-top{
