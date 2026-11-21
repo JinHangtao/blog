@@ -2049,6 +2049,15 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
 }
 /* 入场完成后释放动画层（fill:both 会让 sb/main 永久保留合成层与 stacking context） */
 .intro-done .sb,.intro-done .main,.intro-done .sb > *,.intro-done #starsBg,.intro-done .sb-av{animation:none !important;}
+/* 桌面端：让这些元素「始终」是独立合成层。
+   入场动画结束时若图层被回收（动画层→普通层），文字/头像会被重新栅格化并产生 1~3px 的位移；
+   常驻图层则前后渲染方式完全一致，就不会再有那一下抖动。
+   用 will-change:opacity 给 .main，避免 transform 让 .main 变成 fixed 子元素的包含块。 */
+@media (min-width:769px) and (hover:hover){
+  .sb,.sb > *,.sb-av{will-change:transform;}
+  .main{will-change:opacity;}
+  .ph-reveal.in{will-change:opacity,transform;}
+}
 /* 进场期间被打断：之后新触发的过渡直接快进收尾 */
 .intro-skip .ph-reveal,.intro-skip .ph-word,.intro-skip .ph-n,.intro-skip .ph-sub,.intro-skip .ph-rule{
   transition-duration:.28s!important;transition-delay:0s!important;
