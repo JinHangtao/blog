@@ -2348,6 +2348,20 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
   html[data-jh-lang="zh"] .tab{font-size:.8rem;letter-spacing:.1em;padding:13px 14px}
 }
 </style>
+<style id="modern-panels">
+/* ══ 最外层区块光边：只改这一圈，其余保持原样 ══
+   想回原样：删掉这整段 <style id="modern-panels"> 即可
+   --edge 越接近卡片底色，光边越隐形（卡片底色约 #141312） */
+:root{ --edge:#1e1c1a; }
+
+.sb-card,.main,#articleOverlay{ border-color:var(--edge); }
+.sb::before,.sb::after{ border-color:var(--edge); }
+
+/* 仅给大面板一点向外的柔影代替硬线来拉开层次（侧栏被 clip-path 裁切，不加） */
+@media(min-width:769px){
+  .main,#articleOverlay{ box-shadow:0 24px 60px -30px rgba(0,0,0,.8); }
+}
+</style>
 </head>
 <body class="is-loading">
 <canvas id="starsBg"></canvas>
