@@ -1039,7 +1039,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   /* leave: fast snap back, no delay */
   transition:border-color .3s cubic-bezier(.4,0,.2,1),
              transform .3s cubic-bezier(.4,0,.2,1);
-  will-change:transform;
+  /* 不再常驻 will-change:transform：切到 blog 时 display:none→block 会让每张大卡片的合成层整块重新光栅化，
+     容易造成入场头一两帧的闪烁；只在悬停时才提升（见下方 :hover） */
 }
 .blog-post::after{
   content:'';
@@ -1056,10 +1057,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 @media(hover:hover){
 .blog-post:hover{
   border-color:rgba(196,154,82,0.35);
-  border-width:0.5px;
+  will-change:transform;
   transform:translateY(-3px);
   transition:border-color .55s cubic-bezier(.25,.8,.25,1),
-             border-width .55s cubic-bezier(.25,.8,.25,1),
              transform .55s cubic-bezier(.25,.8,.25,1);
   transition-delay:35ms;
 }
@@ -1081,6 +1081,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   position:relative;
 }
 .bp-text{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;
   font-family:'Jost',sans-serif;
   font-weight:400;
   font-size:.82rem;
