@@ -1512,6 +1512,9 @@ button, a, input, label, [onclick], video {
 #articleOverlay.art-settle::before{opacity:0;transition:opacity .24s ease;}
 @media(prefers-reduced-motion:reduce){#articleOverlay.art-settle::before{transition-duration:.01s}}
 
+/* 背景略微后退时的压暗层：在页面之上、文章面板之下；幅度由 JS 随展开进度驱动 */
+#artDim{position:fixed;inset:0;z-index:4999;background:#000;opacity:0;pointer-events:none;}
+
 /* ── 顶部进度条 ── */
 #artProgress{
   position:absolute;
@@ -1656,7 +1659,7 @@ button, a, input, label, [onclick], video {
 .art-body a:hover{ border-bottom-color:var(--gold); }
 
 /* 段落淡入 */
-.art-reveal{ opacity:0; transform:translateY(18px); transition:opacity .5s ease, transform .5s ease; }
+.art-reveal{ opacity:0; transform:translateY(12px); transition:opacity .32s cubic-bezier(.3,.1,.1,1), transform .32s cubic-bezier(.3,.1,.1,1); }
 .art-reveal.in{ opacity:1; transform:translateY(0); }
 
 /* section 分割线 */
@@ -2906,6 +2909,7 @@ Digital Video, Accademia di Belle Arti di Roma.</p>
 </main>
 </div><!-- /shell -->
 
+<div id="artDim" aria-hidden="true"></div>
 <!-- ═══ ARTICLE OVERLAY ═══ -->
 <div id="articleOverlay" role="article" aria-hidden="true">
   <div id="artProgress"></div>
@@ -6091,6 +6095,7 @@ function doCopy(btn){
         if(e.target !== el) return;
         if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openArticle(a.id); }
       });
+      artBindCard(el, a.id, NO_OPEN);
 
       // 绑定留言发送按钮（addEventListener + 直接传 commentId 变量，不用 inline onclick 字符串拼接，
       // 避免 commentId 里若含单引号等特殊字符会破坏内联 onclick 的 HTML/JS 语法，导致点击静默无反应）
@@ -6200,6 +6205,7 @@ function doCopy(btn){
     var d = T(ARTICLES[id]);
     if(!d) return;
     currentId = id;
+    artContent.removeAttribute('data-pre');
 
     var body = '';
     d.body.forEach(function(seg, bi){
@@ -6440,6 +6446,167 @@ function doCopy(btn){
   function artSmooth(x){ x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
   function artReduced(){ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
 
+  // ══ 背景略微后退（1.5% 缩小 + 轻微压暗，随面板展开进度 u 同步）══
+  // 手机上先自测：展开最初几帧过后若平均帧间隔 > 30ms（低于约 33fps），本次会话自动关闭这一项。
+  var artShell = document.querySelector('.shell'), artDim = document.getElementById('artDim');
+  var artBgOn = false, artBgTimer = 0, artRecedeOff = false;
+  var RECEDE_SCALE = .015, RECEDE_DIM = .2;
+  try{ artRecedeOff = sessionStorage.getItem('artRecedeOff') === '1'; }catch(e){}
+  if(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) artRecedeOff = true;
+
+  function artBg(u){
+    if(!artShell || artRecedeOff) return;
+    if(artBgTimer){ clearTimeout(artBgTimer); artBgTimer = 0; artShell.style.transition = ''; if(artDim) artDim.style.transition = ''; }
+    if(!artBgOn){                                   // 起点：以视口中心为缩放原点（此时 .shell 还没有 transform）
+      var r = artShell.getBoundingClientRect();
+      artShell.style.transformOrigin = (innerWidth / 2 - r.left).toFixed(1) + 'px ' + (innerHeight / 2 - r.top).toFixed(1) + 'px';
+      artBgOn = true;
+    }
+    artShell.style.willChange = 'transform';
+    artShell.style.transform = 'scale(' + (1 - RECEDE_SCALE * u).toFixed(4) + ')';
+    if(artDim) artDim.style.opacity = (RECEDE_DIM * u).toFixed(3);
+  }
+  function artBgSettle(){ if(artShell) artShell.style.willChange = ''; }       // 展开结束：静止态不需要提升图层
+  function artBgClear(animate){
+    if(artDim && !artBgOn) artDim.style.opacity = '0';
+    if(!artShell || !artBgOn) return;
+    artBgOn = false;
+    if(artBgTimer){ clearTimeout(artBgTimer); artBgTimer = 0; }
+    function end(){
+      artBgTimer = 0;
+      artShell.style.transition = ''; artShell.style.transformOrigin = ''; artShell.style.willChange = '';
+      if(artDim) artDim.style.transition = '';
+    }
+    if(animate){
+      artShell.style.transition = 'transform .3s cubic-bezier(.3,.1,.1,1)';
+      if(artDim) artDim.style.transition = 'opacity .3s cubic-bezier(.3,.1,.1,1)';
+      artShell.style.transform = ''; if(artDim) artDim.style.opacity = '0';
+      artBgTimer = setTimeout(end, 340);
+    } else {
+      artShell.style.transform = ''; if(artDim) artDim.style.opacity = '0';
+      end();
+    }
+  }
+  // 量卡片位置时先暂时去掉背景的缩放，否则收回时终点会偏 1% 左右
+  function artMeasureCard(id){
+    if(!artShell || !artBgOn) return artCardInfo(id);
+    var tf = artShell.style.transform;
+    artShell.style.transform = '';
+    var info = artCardInfo(id);
+    artShell.style.transform = tf;
+    return info;
+  }
+
+  // ══ 逐段入场：只错开首屏几段（总时长约 0.4s），屏幕外的滚到才显示；缓动与面板同一条 ══
+  var artIO = null, artRevealTok = 0;
+  function artRevealRun(){
+    var els = Array.prototype.slice.call(artContent.querySelectorAll('.art-reveal'));
+    if(!els.length) return;
+    if(artReduced()){ els.forEach(function(el){ el.classList.add('in'); }); return; }
+    var limit = artScroll.getBoundingClientRect().top + artScroll.clientHeight;
+    var first = [], rest = [];
+    els.forEach(function(el){ (el.getBoundingClientRect().top < limit ? first : rest).push(el); });
+    var step = first.length > 1 ? Math.min(24, 80 / (first.length - 1)) : 0;   // 最后一段最多晚 80ms，加上 320ms 时长 ≈ 0.4s
+    first.forEach(function(el, i){
+      el.style.transitionDelay = (i * step).toFixed(0) + 'ms';
+      el.classList.add('in');
+    });
+    setTimeout(function(){ first.forEach(function(el){ el.style.transitionDelay = ''; }); }, 520);
+    if(!rest.length) return;
+    if(!('IntersectionObserver' in window)){ rest.forEach(function(el){ el.classList.add('in'); }); return; }
+    artIO = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(!en.isIntersecting) return;
+        en.target.classList.add('in');
+        artIO.unobserve(en.target);
+      });
+    }, { root: artScroll, rootMargin: '0px 0px -6% 0px', threshold: 0.01 });
+    rest.forEach(function(el){ artIO.observe(el); });
+  }
+
+  // ══ 提前准备文章：悬停 / 刚按下时就预加载图片并把文章排好版 ══
+  var artPreImgs = {}, artPreTimer = 0;
+  function artPreloadImgs(id){
+    if(artPreImgs[id] || !ARTICLES[id]) return;
+    var list = artPreImgs[id] = [];
+    var d = T(ARTICLES[id]) || ARTICLES[id];
+    var html = (d.body || []).join('');
+    var re = /<img[^>]+src=["']([^"']+)["']|<video[^>]+poster=["']([^"']+)["']/ig, m, n = 0;
+    while((m = re.exec(html)) && n++ < 12){
+      var im = new Image();
+      im.decoding = 'async';
+      im.src = m[1] || m[2];
+      if(im.decode) im.decode().catch(function(){});
+      list.push(im);                                   // 持有引用，避免被回收
+    }
+  }
+  function artCanPrewarm(){
+    return loaded && !artFlight && !overlay.classList.contains('art-on') &&
+           !overlay.classList.contains('art-flying') && !overlay.classList.contains('art-settle');
+  }
+  function artPrewarm(id){
+    if(!ARTICLES[id] || !artCanPrewarm()) return;
+    artPreloadImgs(id);
+    var key = id + '|' + curLang();
+    if(artContent.getAttribute('data-pre') === key && artContent.childElementCount) return;
+    var saved = currentId;
+    try{ buildContent(id); }catch(e){ artContent.innerHTML = ''; currentId = saved; return; }
+    currentId = saved;                                 // 面板还没打开：不占用「当前文章」
+    artContent.setAttribute('data-pre', key);
+    void artScroll.offsetHeight;                       // 现在就完成排版，点击时第一帧是现成的
+  }
+  function artPrebuilt(id){
+    var ok = artContent.getAttribute('data-pre') === id + '|' + curLang() && artContent.childElementCount > 0;
+    artContent.removeAttribute('data-pre');
+    return ok;
+  }
+  function artSchedule(id, delay){
+    clearTimeout(artPreTimer);
+    artPreTimer = setTimeout(function(){
+      artPreTimer = 0;
+      if(window.requestIdleCallback) requestIdleCallback(function(){ artPrewarm(id); }, { timeout: 300 });
+      else artPrewarm(id);
+    }, delay);
+  }
+
+  // ══ 卡片：按下就有回应（缩 1%）+ 触发提前准备 ══
+  function artBindCard(el, id, noOpen){
+    var anim = null, down = false, sx = 0, sy = 0, canAnim = false;
+    try{ canAnim = !!(el.animate && CSS.supports('scale', '1')); }catch(e){}
+    var EASE = 'cubic-bezier(.22,1,.36,1)';
+    function pressOn(){
+      if(!canAnim || anim || artReduced()) return;
+      anim = el.animate([{ scale: '1' }, { scale: '0.99' }], { duration: 110, easing: EASE, fill: 'forwards' });
+    }
+    function pressOff(){
+      if(!anim) return;
+      anim.cancel(); anim = null;
+      el.animate([{ scale: '0.99' }, { scale: '1' }], { duration: 200, easing: EASE });
+    }
+    function release(){ if(!down) return; down = false; pressOff(); }
+    el.addEventListener('pointerdown', function(e){
+      if(e.pointerType === 'mouse' && e.button !== 0) return;
+      if(e.target.closest(noOpen)) return;
+      down = true; sx = e.clientX; sy = e.clientY;
+      pressOn();
+      artPreloadImgs(id);
+      if(e.pointerType !== 'mouse') artSchedule(id, 45);   // 触屏：按住且没开始滚动才排版
+    }, { passive: true });
+    el.addEventListener('pointermove', function(e){
+      if(!down) return;
+      if(Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8){ release(); clearTimeout(artPreTimer); }
+    }, { passive: true });
+    el.addEventListener('pointerup', release, { passive: true });
+    el.addEventListener('pointercancel', function(){ release(); clearTimeout(artPreTimer); }, { passive: true });
+    el.addEventListener('pointerenter', function(e){
+      if(e.pointerType === 'mouse' || e.pointerType === 'pen') artSchedule(id, 80);   // 悬停约 80ms 视为有意图
+    }, { passive: true });
+    el.addEventListener('pointerleave', function(e){
+      if(e.pointerType === 'mouse') clearTimeout(artPreTimer);
+      release();
+    }, { passive: true });
+  }
+
   // 卡片「看得见」的那一块（去掉被 tab 栏 / 容器边缘遮住的部分）；看不见就返回 null → 走淡入淡出
   function artCardInfo(id){
     var card = id ? document.getElementById('post-' + id) : null;
@@ -6477,6 +6644,8 @@ function doCopy(btn){
   function artHardClose(){
     artStopFlight();
     artAfterOpen = null;
+    artBgClear(false);
+    if(artIO){ artIO.disconnect(); artIO = null; }
     if(artSettleTimer){ clearTimeout(artSettleTimer); artSettleTimer = 0; }
     overlay.style.transition = 'none';                 // 否则 art-on 摘掉后会再淡出 .35s，露出已复位的内容
     overlay.classList.remove('art-flying', 'art-settle', 'art-on');
@@ -6490,6 +6659,7 @@ function doCopy(btn){
   }
   function artOpenDone(){
     artClearFx();
+    artBgSettle();
     var after = artAfterOpen; artAfterOpen = null;
     if(after) setTimeout(function(){ if(overlay.classList.contains('art-on')) after(); }, 120);
     overlay.classList.remove('art-flying');
@@ -6497,8 +6667,9 @@ function doCopy(btn){
     artSettleTimer = setTimeout(function(){ artSettleTimer = 0; overlay.classList.remove('art-settle'); }, 280);
   }
 
-  // 一次飞行。dir: 'in' 展开 / 'out' 收回；u0 = 起始进度（被打断时从当前姿态接着飞，不跳变）
-  function artFly(dir, info, u0, done){
+  // 一次飞行。dir: 'in' 展开 / 'out' 收回 / 'drag'（manual=true：由手指逐帧驱动，自己不跑帧）；
+  // u0 = 起始进度（被打断时从当前姿态接着飞，不跳变）
+  function artFly(dir, info, u0, done, manual){
     artStopFlight();
     if(artSettleTimer){ clearTimeout(artSettleTimer); artSettleTimer = 0; }
     overlay.classList.remove('art-settle');
@@ -6506,7 +6677,8 @@ function doCopy(btn){
     var O = overlay.getBoundingClientRect(), v = info.v;
     var s = [v.t - O.top, O.right - v.r, O.bottom - v.b, v.l - O.left];      // 卡片可见矩形相对面板的 inset
     var R0 = info.radius, R1 = parseFloat(getComputedStyle(overlay).borderTopLeftRadius) || 0;
-    var target = dir === 'in' ? 1 : 0, dur = dir === 'in' ? ART_IN : ART_OUT;
+    var target = dir === 'in' ? 1 : 0;
+    var dur = (dir === 'in' ? ART_IN : ART_OUT) * Math.max(.45, Math.abs(target - u0));   // 从中途接着飞：距离短就相应缩短
     var ease = dir === 'in' ? ART_EASE_IN : ART_EASE_OUT;
 
     // 正文随面板「长大」：以卡片中心为原点，从略小的尺寸放大到 1（收回时反过来），不再只是被揭开的幕布
@@ -6530,26 +6702,52 @@ function doCopy(btn){
       window.removeEventListener('keydown',   stopKey,   { capture: true });
     }};
 
-    // 时间按「帧间隔累加」而不是墙钟时间，且单帧最多记 34ms：
-    // 点击瞬间浏览器要生成整篇文章、排版、解码图片，第一帧常常卡几十到上百毫秒；
-    // 若按墙钟走，动画一出来就已经跳过开头（体感「啪」地出现）。累加 + 限幅后，开头永远是从头平滑走起。
-    var last = 0, el = 0;
-    function frame(now){
-      f.raf = 0;
-      if(artFlight !== f) return;
-      if(last){ el += Math.max(0, Math.min(now - last, 34)); }
-      last = now;
-      var p = Math.min(1, el / dur);
-      var u = u0 + (target - u0) * ease(p);           // 窗口位置
+    // 把进度 u 画出来：窗口、底色、正文、缩放、背景后退全部跟随同一个 u，
+    // 所以无论是自己跑、被打断、反向，还是被手指拖着走，都天然连续
+    function render(u){
       f.u = u;
       var q = 1 - u;
       overlay.style.clipPath = 'inset(' + (s[0] * q).toFixed(2) + 'px ' + (s[1] * q).toFixed(2) + 'px ' +
                                (s[2] * q).toFixed(2) + 'px ' + (s[3] * q).toFixed(2) + 'px round ' +
                                (R0 + (R1 - R0) * u).toFixed(2) + 'px)';
-      // 底色 / 正文 / 缩放全部跟随同一个 u：窗口长到哪，它们就推进到哪，被打断、反向时也天然连续
       overlay.style.setProperty('--art-bg', artSmooth(u / .3).toFixed(3));
       overlay.style.setProperty('--art-c',  artSmooth((u - .12) / .5).toFixed(3));
       overlay.style.setProperty('--art-s',  (.93 + .07 * u).toFixed(4));
+      artBg(u);
+    }
+    f.render = render;
+
+    if(manual){                                        // 手指驱动：只登记飞行状态并画出起点，不跑帧
+      artFlight = f;
+      window._lbFlying = true;
+      render(u0);
+      return f;
+    }
+
+    // 时间按「帧间隔累加」而不是墙钟时间，且单帧最多记 34ms：
+    // 点击瞬间浏览器要生成整篇文章、排版、解码图片，第一帧常常卡几十到上百毫秒；
+    // 若按墙钟走，动画一出来就已经跳过开头（体感「啪」地出现）。累加 + 限幅后，开头永远是从头平滑走起。
+    var last = 0, el = 0, nf = 0, dtSum = 0, dtN = 0;
+    function frame(now){
+      f.raf = 0;
+      if(artFlight !== f) return;
+      if(last){
+        var dt = now - last;
+        el += Math.max(0, Math.min(dt, 34));
+        nf++;
+        // 背景后退的自测：跳过最开头几帧（那里的卡顿来自生成文章，不是后退），之后取 12 帧平均
+        if(dir === 'in' && !artRecedeOff && nf > 4 && dtN < 12){
+          dtSum += dt; dtN++;
+          if(dtN === 12 && dtSum / dtN > 30){
+            artRecedeOff = true;
+            try{ sessionStorage.setItem('artRecedeOff', '1'); }catch(e){}
+            artBgClear(true);
+          }
+        }
+      }
+      last = now;
+      var p = Math.min(1, el / dur);
+      render(u0 + (target - u0) * ease(p));
       if(p >= 1){ artFlight = null; f.unlock(); window._lbFlying = false; done(); return; }
       f.raf = requestAnimationFrame(frame);
     }
@@ -6557,6 +6755,22 @@ function doCopy(btn){
     window._lbFlying = true;                           // 让滚动模糊等主线程任务让路（同灯箱）
     frame(performance.now());                          // 第一帧同步写入，不会闪一下终态
     return f;
+  }
+
+  // 手指松开但没有越过关闭条件：面板从当前姿态回到全屏，再走正常的「展开完成」收尾
+  function artRelease(f){
+    var u0 = f.u, dur = 260 * Math.max(.5, 1 - u0), last = 0, el = 0;
+    function step(now){
+      f.raf = 0;
+      if(artFlight !== f) return;
+      if(last) el += Math.max(0, Math.min(now - last, 34));
+      last = now;
+      var p = Math.min(1, el / dur);
+      f.render(u0 + (1 - u0) * ART_EASE_IN(p));
+      if(p >= 1){ artFlight = null; f.unlock(); window._lbFlying = false; artOpenDone(); return; }
+      f.raf = requestAnimationFrame(step);
+    }
+    f.raf = requestAnimationFrame(step);
   }
 
   // ── 打开 ──
@@ -6578,7 +6792,8 @@ function doCopy(btn){
     var prevCommentRow = document.getElementById('artCommentRow');
     if(prevCommentRow) prevCommentRow.classList.remove('docked');
 
-    buildContent(id);
+    if(artPrebuilt(id)) currentId = id;                 // 悬停/按下时已经排好版：直接用现成的
+    else buildContent(id);
     artScroll.scrollTop = 0;
     artProgress.style.width = '0%';
     overlay.style.transform = '';
@@ -6596,10 +6811,11 @@ function doCopy(btn){
 
     // 有飞行：面板展开到约三成时开始逐段入场；布局测量（短文章评论框检查）留到飞行结束之后，
     // 否则中途强制同步排版会让动画顿一下。没有飞行：等原来的 350ms 淡入完毕
+    var revealTok = ++artRevealTok;
+    if(artIO){ artIO.disconnect(); artIO = null; }
     setTimeout(function(){
-      artContent.querySelectorAll('.art-reveal').forEach(function(el, i){
-        setTimeout(function(){ el.classList.add('in'); }, i * 55);
-      });
+      if(revealTok !== artRevealTok) return;
+      artRevealRun();
       if(!info) checkAutoExpandComment();
     }, info ? 180 : 370);
     if(info) artAfterOpen = function(){ checkAutoExpandComment(); };
@@ -6716,7 +6932,7 @@ function doCopy(btn){
     var wasOn   = overlay.classList.contains('art-on');
     var id      = currentId;
     var running = artFlight;                                            // 展开飞行中被关：从当前姿态直接收回
-    var info    = (wasOn && !artReduced()) ? artCardInfo(id) : null;    // 必须在恢复滚动之前量
+    var info    = (wasOn && !artReduced()) ? artMeasureCard(id) : null; // 必须在恢复滚动之前量（背景后退的缩放会先摘掉再量）
     // 恢复背景滚动
     document.body.style.overflow = '';
     // 清理手势残留
@@ -6743,6 +6959,7 @@ function doCopy(btn){
         artHardClose();                                                 // 飞行途中卡片已不可见：直接收掉
       } else {
         overlay.classList.remove('art-on');                             // 原来的 CSS 淡出
+        artBgClear(true);
       }
       setTimeout(function(){ artContent.innerHTML = ''; }, 400);
       if(artOpener && document.body.contains(artOpener)){
@@ -6966,22 +7183,25 @@ function doCopy(btn){
     document.addEventListener('articleClose', function(){ closeWechat(); });
   })();
 
-  // ── 移动端右滑退出（只有 overlay 跟手向右推出，背景页面保持原位不动）──
+  // ── 移动端右滑退出 ──
+  // 找得到卡片时：右滑直接驱动「缩回卡片」的同一套动画，手指拖到哪面板就缩到哪；
+  // 松手按距离 + 速度决定收回还是留下（收回时从当前姿态接着飞，不跳变）。
+  // 找不到卡片 / 开了「减少动态效果」时，退回原来的整块面板右滑。
   (function(){
     if(!('ontouchstart' in window) && navigator.maxTouchPoints === 0) return;
     var startX = 0, startY = 0, dragging = false, dirLocked = null, curX = 0;
-    var THRESHOLD = 72; // px 滑过此距离触发关闭
+    var mode = null, drag = null, lastX = 0, lastT = 0, vx = 0;
+    var THRESHOLD = 72;          // 旧模式：px 滑过此距离触发关闭
+    var REACH = .7;              // 新模式：手指拖过 70% 屏宽 = 面板缩回到卡片大小
+    var CLOSE_AT = .25;          // 新模式：已缩回超过 25% 就算「要关」
+    var FLICK = .45;             // 新模式：松手速度（px/ms）超过这个也算「要关」
 
     function onTouchStart(e){
-      if(!overlay.classList.contains('art-on')) return;
+      if(!overlay.classList.contains('art-on') || artFlight){ dragging = false; return; }
       var t = e.touches[0];
-      startX = t.clientX;
-      startY = t.clientY;
-      dragging = true;
-      dirLocked = null;
-      curX = 0;
-      // 关掉所有 transition，跟手
-      overlay.style.transition = 'none';
+      startX = t.clientX; startY = t.clientY;
+      lastX = startX; lastT = e.timeStamp; vx = 0;
+      dragging = true; dirLocked = null; curX = 0; mode = null; drag = null;
     }
     function onTouchMove(e){
       if(!dragging) return;
@@ -6996,26 +7216,34 @@ function doCopy(btn){
       }
       if(dirLocked !== 'h') return;
 
-      // 只接受向右滑（退出方向）；反向滑动时夹到 0，避免卡在上一次位置
-      dx = Math.max(0, dx);
-      curX = dx;
+      if(!mode){                                       // 方向刚锁定：决定走哪种模式
+        var info = artReduced() ? null : artMeasureCard(currentId);
+        if(info){ mode = 'card'; drag = artFly('drag', info, 1, null, true); }
+        else { mode = 'legacy'; overlay.style.transition = 'none'; }
+      }
 
-      var W = window.innerWidth;
-      var ratio = Math.min(dx / W, 1);
-      // 只有 overlay 跟手；背景页面（.main）保持原位不动，避免"底下的页面也跟着滑"的怪异感
-      overlay.style.opacity   = (1 - ratio * 0.12).toString();
-      overlay.style.transform = 'translateX(' + dx + 'px)';
+      var dt = e.timeStamp - lastT;
+      if(dt > 0){ vx = .8 * vx + .2 * ((t.clientX - lastX) / dt); lastX = t.clientX; lastT = e.timeStamp; }
+
+      dx = Math.max(0, dx);                            // 只接受向右滑（退出方向）
+      curX = dx;
+      if(mode === 'card'){
+        drag.render(1 - Math.min(1, dx / (window.innerWidth * REACH)));
+      } else {
+        var ratio = Math.min(dx / window.innerWidth, 1);
+        overlay.style.opacity   = (1 - ratio * 0.12).toString();
+        overlay.style.transform = 'translateX(' + dx + 'px)';
+      }
     }
 
     function snapBack(){
-      // 回弹：不再用 overshoot 曲线（>1 会让 overlay 越过左边缘露出缝隙）
       overlay.style.transition = 'transform .3s cubic-bezier(.22,.8,.3,1), opacity .25s cubic-bezier(.4,0,.2,1)';
       overlay.style.transform  = '';
       overlay.style.opacity    = '';
     }
-
     function flyOut(){
       var W = window.innerWidth;
+      artBgClear(true);
       overlay.style.transition = 'transform .34s cubic-bezier(.4,0,.2,1), opacity .3s cubic-bezier(.4,0,.2,1)';
       overlay.style.transform  = 'translateX(' + W + 'px)';
       overlay.style.opacity    = '0';
@@ -7035,19 +7263,26 @@ function doCopy(btn){
     function onTouchEnd(){
       if(!dragging) return;
       dragging = false;
-      if(curX >= THRESHOLD){
-        flyOut();
-      } else {
-        snapBack();
+      if(mode === 'card' && drag){
+        var f = drag; drag = null;
+        var close = curX > 24 && vx > -.3 && ((1 - f.u) > CLOSE_AT || vx > FLICK);
+        if(close) doClose(false);                      // 从 f.u 当前姿态接着缩回卡片
+        else artRelease(f);
+      } else if(mode === 'legacy'){
+        if(curX >= THRESHOLD) flyOut(); else snapBack();
       }
-      curX = 0; dirLocked = null;
+      curX = 0; dirLocked = null; mode = null;
     }
 
     overlay.addEventListener('touchstart', onTouchStart, {passive:true});
     overlay.addEventListener('touchmove',  onTouchMove,  {passive:true});
     overlay.addEventListener('touchend',   onTouchEnd,   {passive:true});
     overlay.addEventListener('touchcancel',function(){
-      if(dragging){ dragging = false; snapBack(); curX = 0; dirLocked = null; }
+      if(!dragging) return;
+      dragging = false;
+      if(mode === 'card' && drag){ var f = drag; drag = null; artRelease(f); }
+      else if(mode === 'legacy') snapBack();
+      curX = 0; dirLocked = null; mode = null;
     },{passive:true});
   })();
 
