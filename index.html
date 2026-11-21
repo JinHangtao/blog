@@ -2371,6 +2371,17 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
   .blog-post:hover{ border-color:rgba(196,154,82,.16); }
   .blog-post:hover .blog-cover-video-frame{ border-color:var(--edge); }
 }
+/* ══ 帖子卡片：比外层区块稍微"看得清"一点 ══
+   --edge-post 介于旧的亮灰 #302d29 和现在的 #1e1c1a 之间；想更清楚就调亮，更隐形就调暗 */
+:root{ --edge-post:#292724; }
+.blog-post{
+  border-color:var(--edge-post);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),   /* 顶边一线很淡的提亮：提示边缘位置 */
+             0 10px 26px -16px rgba(0,0,0,.65);      /* 底部柔影：让卡片从面板上"浮"出来 */
+}
+@media(hover:hover){
+  .blog-post:hover{ border-color:rgba(196,154,82,.24); }
+}
 </style>
 </head>
 <body class="is-loading">
