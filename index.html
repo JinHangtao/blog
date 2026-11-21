@@ -2361,6 +2361,16 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
 @media(min-width:769px){
   .main,#articleOverlay{ box-shadow:0 24px 60px -30px rgba(0,0,0,.8); }
 }
+/* ══ 帖子（blog）里的矩形：同样压低光边 ══ */
+.blog-post,.blog-cover-video-frame,.art-next,.quote-box{ border-color:var(--edge); }
+.quote-box{ border-left-color:var(--gold); }           /* 引用框左侧金色竖条保留 */
+.blog-post input,.art-comment-input,#articleOverlay input{ border-color:var(--edge) !important; }  /* 评论输入框（带内联样式，需 !important） */
+
+/* 悬停时原来是一圈亮金色细线，改成很淡的暖色 */
+@media(hover:hover){
+  .blog-post:hover{ border-color:rgba(196,154,82,.16); }
+  .blog-post:hover .blog-cover-video-frame{ border-color:var(--edge); }
+}
 </style>
 </head>
 <body class="is-loading">
