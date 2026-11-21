@@ -331,14 +331,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* 外层：快速淡入 + 弹簧位移 + 轻微对焦 */
 .reveal-ready .sb{
   animation:
-    sbFade .6s var(--ease-out) both,
-    sbMove 1.3s var(--spring) both;
+    sbFade .6s var(--ease-out) backwards,
+    sbMove 1.3s var(--spring) backwards;
 }
 .reveal-ready .main{
   transform-origin:50% 0;
   animation:
-    mainFade .8s var(--ease-out) .12s both,
-    mainMove 1.4s var(--spring) .12s both;
+    mainFade .8s var(--ease-out) .12s backwards,
+    mainMove 1.4s var(--spring) .12s backwards;
 }
 @keyframes sbFade{from{opacity:0;}to{opacity:1;}}
 @keyframes sbMove{
@@ -374,7 +374,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   }
   .reveal-ready .sb-av{
     animation:
-      avReveal .9s cubic-bezier(0,0,.18,1) .08s both,
+      avReveal .9s cubic-bezier(0,0,.18,1) .08s backwards,
       avPopScale 1.3s var(--spring-pop) .06s backwards,
       avPopFade .5s var(--ease-out) .06s backwards;
   }
@@ -424,7 +424,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 }
 .reveal-ready .sb-av{
   animation:
-    avReveal .9s cubic-bezier(0,0,.18,1) .08s both,
+    avReveal .9s cubic-bezier(0,0,.18,1) .08s backwards,
     avPopScale 1.3s var(--spring-pop) .06s backwards,
     avPopFade .5s var(--ease-out) .06s backwards,
     avPopBlur .7s var(--ease-out) .06s backwards;
