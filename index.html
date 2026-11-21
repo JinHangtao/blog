@@ -1483,10 +1483,10 @@ button, a, input, label, [onclick], video {
   display:flex;
   flex-direction:column;
   /* 文章「静止态」背景的唯一来源：飞入 / 飞回时直接复用同一组值，保证前后一致 */
-  --art-rgb:13,12,11; --art-a:.72; --art-blur:blur(28px) saturate(1.4);
+  --art-rgb:13,12,11; --art-a:.72; --art-blur-px:28px; --art-sat:1.4;
   background:rgba(var(--art-rgb),var(--art-a));
-  -webkit-backdrop-filter:var(--art-blur);
-  backdrop-filter:var(--art-blur);
+  -webkit-backdrop-filter:blur(var(--art-blur-px)) saturate(var(--art-sat));
+  backdrop-filter:blur(var(--art-blur-px)) saturate(var(--art-sat));
   opacity:0;
   pointer-events:none;
   visibility:hidden;                       /* 关闭时彻底不可见、不可聚焦、不参与点击命中（淡出结束后才生效） */
@@ -1511,7 +1511,7 @@ button, a, input, label, [onclick], video {
     right:var(--gap);
     border-radius:var(--r);
     border:1px solid var(--line2);
-    --art-rgb:22,21,19; --art-a:.82; --art-blur:blur(32px) saturate(1.5);
+    --art-rgb:22,21,19; --art-a:.82; --art-blur-px:32px; --art-sat:1.5;
     overflow:hidden;
   }
 }
@@ -1523,9 +1523,11 @@ button, a, input, label, [onclick], video {
 #articleOverlay.art-flying{
   /* 与静止态同色同透明度同毛玻璃；只用 --art-bg（0→1）控制显现程度，
      飞到终点时数值恰好等于静止态，所以交接处没有任何跳变 */
-  background:rgba(var(--art-rgb),calc(var(--art-a) * var(--art-bg,1))) !important;
-  -webkit-backdrop-filter:var(--art-blur) !important;
-  backdrop-filter:var(--art-blur) !important;
+  /* --art-bg：底色显现（0→1，盖住卡片）；--art-g：毛玻璃程度（0=偏暗纯色，1=静止态毛玻璃）。
+     g=0 时不透明度 100%、无模糊；g=1 时正好等于静止态。飞入 g 由 0→1，飞回则反过来。 */
+  background:rgba(var(--art-rgb),calc(var(--art-bg,1) * (1 - (1 - var(--art-a)) * var(--art-g,1)))) !important;
+  -webkit-backdrop-filter:blur(calc(var(--art-blur-px) * var(--art-g,1))) saturate(calc(1 + (var(--art-sat) - 1) * var(--art-g,1))) !important;
+  backdrop-filter:blur(calc(var(--art-blur-px) * var(--art-g,1))) saturate(calc(1 + (var(--art-sat) - 1) * var(--art-g,1))) !important;
   border-color:transparent !important;
   transition:none !important;
   pointer-events:none !important;
@@ -6683,6 +6685,7 @@ function doCopy(btn){
     overlay.style.clipPath = '';
     overlay.style.removeProperty('--art-bg');
     overlay.style.removeProperty('--art-c');
+    overlay.style.removeProperty('--art-g');
     overlay.style.removeProperty('--art-s');
     ['artTopbar', 'artScroll'].forEach(function(id){
       var e = document.getElementById(id); if(e) e.style.transformOrigin = '';
@@ -6759,6 +6762,7 @@ function doCopy(btn){
                                (s[2] * q).toFixed(2) + 'px ' + (s[3] * q).toFixed(2) + 'px round ' +
                                (R0 + (R1 - R0) * u).toFixed(2) + 'px)';
       overlay.style.setProperty('--art-bg', artSmooth(u / .3).toFixed(3));
+      overlay.style.setProperty('--art-g',  artSmooth((u - .3) / .62).toFixed(3));   // 暗色纯色 → 毛玻璃：飞到约三成开始转，接近落地时完成
       overlay.style.setProperty('--art-c',  artSmooth((u - .12) / .5).toFixed(3));
       overlay.style.setProperty('--art-s',  (.93 + .07 * u).toFixed(4));
       artBg(u);
