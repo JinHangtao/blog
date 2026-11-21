@@ -1499,7 +1499,11 @@ button, a, input, label, [onclick], video {
   will-change:clip-path;
 }
 #articleOverlay.art-flying #artTopbar,
-#articleOverlay.art-flying #artScroll{opacity:var(--art-c,0);}
+#articleOverlay.art-flying #artScroll{
+  opacity:var(--art-c,0);
+  transform:scale(var(--art-s,1));
+  will-change:transform,opacity;
+}
 #articleOverlay.art-flying::before,
 #articleOverlay.art-settle::before{
   content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
@@ -6417,10 +6421,21 @@ function doCopy(btn){
   // 区别只在于：灯箱飞的是一张图，这里飞的是整块文章面板 —— 面板用 clip-path 从被点击卡片的矩形
   // 平滑展开到整个文章区域，关闭时反向收回那张卡片。卡片本身始终留在下面不动，
   // 面板底色渐显把它盖住（= 卡片「长成」文章）；找不到卡片 / 开了「减少动态效果」时退回原来的淡入淡出。
-  var ART_IN = 440, ART_OUT = 300;
-  var ART_EASE = (typeof _lbEaseFn === 'function') ? _lbEaseFn
-               : function(x){ return x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 3); };
-  var artFlight = null, artSettleTimer = 0, artOpener = null;
+  // 灯箱飞的是一张小图，起步猛、落地快（.32,.72,0,1）没问题；整块面板用同一条曲线会在 ~160ms 内弹开到 90%，
+  // 体感就是「啪」一下。所以面板沿用同一个「先快后慢、轻柔落地」的性格，但起步更柔、时间更长。
+  var ART_IN = 560, ART_OUT = 420;
+  function artBezier(x1, y1, x2, y2){
+    function bez(t, a, b){ var u = 1 - t; return 3*u*u*t*a + 3*u*t*t*b + t*t*t; }
+    return function(x){
+      if(x <= 0) return 0; if(x >= 1) return 1;
+      var lo = 0, hi = 1, t = x;
+      for(var i = 0; i < 30; i++){ t = (lo + hi) / 2; if(bez(t, x1, x2) < x) lo = t; else hi = t; }
+      return bez(t, y1, y2);
+    };
+  }
+  var ART_EASE_IN  = artBezier(.3, .1, .1, 1);      // 展开：轻起步 → 加速 → 长长的减速落地
+  var ART_EASE_OUT = artBezier(.25, .05, .05, 1);   // 收回：略快一点，仍然轻落地
+  var artFlight = null, artSettleTimer = 0, artOpener = null, artAfterOpen = null;
 
   function artSmooth(x){ x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
   function artReduced(){ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
@@ -6453,10 +6468,15 @@ function doCopy(btn){
     overlay.style.clipPath = '';
     overlay.style.removeProperty('--art-bg');
     overlay.style.removeProperty('--art-c');
+    overlay.style.removeProperty('--art-s');
+    ['artTopbar', 'artScroll'].forEach(function(id){
+      var e = document.getElementById(id); if(e) e.style.transformOrigin = '';
+    });
   }
   // 立刻收成「已关闭」（不播动画）：被打断 / 无动画路径共用
   function artHardClose(){
     artStopFlight();
+    artAfterOpen = null;
     if(artSettleTimer){ clearTimeout(artSettleTimer); artSettleTimer = 0; }
     overlay.style.transition = 'none';                 // 否则 art-on 摘掉后会再淡出 .35s，露出已复位的内容
     overlay.classList.remove('art-flying', 'art-settle', 'art-on');
@@ -6470,13 +6490,15 @@ function doCopy(btn){
   }
   function artOpenDone(){
     artClearFx();
+    var after = artAfterOpen; artAfterOpen = null;
+    if(after) setTimeout(function(){ if(overlay.classList.contains('art-on')) after(); }, 120);
     overlay.classList.remove('art-flying');
     overlay.classList.add('art-settle');               // 纯色层淡出，磨砂底色平滑接管
     artSettleTimer = setTimeout(function(){ artSettleTimer = 0; overlay.classList.remove('art-settle'); }, 280);
   }
 
-  // 一次飞行。dir: 'in' 展开 / 'out' 收回；u0 / k0 = 起始进度（被打断时从当前姿态接着飞，不跳变）
-  function artFly(dir, info, u0, k0, done){
+  // 一次飞行。dir: 'in' 展开 / 'out' 收回；u0 = 起始进度（被打断时从当前姿态接着飞，不跳变）
+  function artFly(dir, info, u0, done){
     artStopFlight();
     if(artSettleTimer){ clearTimeout(artSettleTimer); artSettleTimer = 0; }
     overlay.classList.remove('art-settle');
@@ -6485,6 +6507,15 @@ function doCopy(btn){
     var s = [v.t - O.top, O.right - v.r, O.bottom - v.b, v.l - O.left];      // 卡片可见矩形相对面板的 inset
     var R0 = info.radius, R1 = parseFloat(getComputedStyle(overlay).borderTopLeftRadius) || 0;
     var target = dir === 'in' ? 1 : 0, dur = dir === 'in' ? ART_IN : ART_OUT;
+    var ease = dir === 'in' ? ART_EASE_IN : ART_EASE_OUT;
+
+    // 正文随面板「长大」：以卡片中心为原点，从略小的尺寸放大到 1（收回时反过来），不再只是被揭开的幕布
+    var cx = (v.l + v.r) / 2, cy = (v.t + v.b) / 2;
+    var scaled = [document.getElementById('artTopbar'), document.getElementById('artScroll')].filter(Boolean);
+    scaled.forEach(function(el){
+      var r = el.getBoundingClientRect();
+      el.style.transformOrigin = (cx - r.left).toFixed(1) + 'px ' + (cy - r.top).toFixed(1) + 'px';
+    });
 
     // 飞行期间锁滚动（与灯箱一致：事件拦截，不改 overflow，布局不会位移）
     function stopWheel(e){ if(e.ctrlKey) return; if(e.cancelable) e.preventDefault(); }
@@ -6493,27 +6524,32 @@ function doCopy(btn){
     window.addEventListener('wheel',     stopWheel, { passive: false, capture: true });
     window.addEventListener('touchmove', stopWheel, { passive: false, capture: true });
     window.addEventListener('keydown',   stopKey,   { passive: false, capture: true });
-    var f = { dir: dir, u: u0, k: k0, raf: 0, unlock: function(){
+    var f = { dir: dir, u: u0, raf: 0, scaled: scaled, unlock: function(){
       window.removeEventListener('wheel',     stopWheel, { capture: true });
       window.removeEventListener('touchmove', stopWheel, { capture: true });
       window.removeEventListener('keydown',   stopKey,   { capture: true });
     }};
 
-    var t0 = 0;
+    // 时间按「帧间隔累加」而不是墙钟时间，且单帧最多记 34ms：
+    // 点击瞬间浏览器要生成整篇文章、排版、解码图片，第一帧常常卡几十到上百毫秒；
+    // 若按墙钟走，动画一出来就已经跳过开头（体感「啪」地出现）。累加 + 限幅后，开头永远是从头平滑走起。
+    var last = 0, el = 0;
     function frame(now){
       f.raf = 0;
       if(artFlight !== f) return;
-      if(!t0) t0 = now;
-      var p = Math.min(1, Math.max(0, (now - t0) / dur));
-      var u = u0 + (target - u0) * ART_EASE(p);        // 窗口位置：与灯箱同一条缓动
-      var k = k0 + (target - k0) * p;                  // 底色 / 正文渐显：线性时间，更柔
-      f.u = u; f.k = k;
+      if(last){ el += Math.max(0, Math.min(now - last, 34)); }
+      last = now;
+      var p = Math.min(1, el / dur);
+      var u = u0 + (target - u0) * ease(p);           // 窗口位置
+      f.u = u;
       var q = 1 - u;
       overlay.style.clipPath = 'inset(' + (s[0] * q).toFixed(2) + 'px ' + (s[1] * q).toFixed(2) + 'px ' +
                                (s[2] * q).toFixed(2) + 'px ' + (s[3] * q).toFixed(2) + 'px round ' +
                                (R0 + (R1 - R0) * u).toFixed(2) + 'px)';
-      overlay.style.setProperty('--art-bg', artSmooth(k / .2).toFixed(3));          // 底色先盖住卡片，避免两层文字叠在一起
-      overlay.style.setProperty('--art-c',  artSmooth((k - .16) / .5).toFixed(3));  // 正文随后渐显
+      // 底色 / 正文 / 缩放全部跟随同一个 u：窗口长到哪，它们就推进到哪，被打断、反向时也天然连续
+      overlay.style.setProperty('--art-bg', artSmooth(u / .3).toFixed(3));
+      overlay.style.setProperty('--art-c',  artSmooth((u - .12) / .5).toFixed(3));
+      overlay.style.setProperty('--art-s',  (.93 + .07 * u).toFixed(4));
       if(p >= 1){ artFlight = null; f.unlock(); window._lbFlying = false; done(); return; }
       f.raf = requestAnimationFrame(frame);
     }
@@ -6547,7 +6583,7 @@ function doCopy(btn){
     artProgress.style.width = '0%';
     overlay.style.transform = '';
     overlay.style.opacity   = '';
-    if(info) artFly('in', info, 0, 0, artOpenDone);    // 先把窗口设到卡片位置，再显示面板
+    if(info) artFly('in', info, 0, artOpenDone);    // 先把窗口设到卡片位置，再显示面板
     overlay.classList.add('art-on');
     overlay.setAttribute('aria-hidden','false');
     // 锁住背景滚动（移动端防穿透）
@@ -6558,14 +6594,15 @@ function doCopy(btn){
       try{ overlay.focus({ preventScroll: true }); }catch(e){}
     }
 
-    // 有飞行：面板展开到约三成时就开始逐段入场；没有飞行：等原来的 350ms 淡入完毕
+    // 有飞行：面板展开到约三成时开始逐段入场；布局测量（短文章评论框检查）留到飞行结束之后，
+    // 否则中途强制同步排版会让动画顿一下。没有飞行：等原来的 350ms 淡入完毕
     setTimeout(function(){
       artContent.querySelectorAll('.art-reveal').forEach(function(el, i){
         setTimeout(function(){ el.classList.add('in'); }, i * 55);
       });
-      // 内容动画播完、布局稳定后，检查文章是否短到没有滚动空间
-      checkAutoExpandComment();
-    }, info ? 140 : 370);
+      if(!info) checkAutoExpandComment();
+    }, info ? 180 : 370);
+    if(info) artAfterOpen = function(){ checkAutoExpandComment(); };
   };
 
   // ── 切换语言（接入主页同一套动画：淡出虚化 → 换字 → 由虚到实 + 版面 FLIP 滑动）──
@@ -6693,7 +6730,7 @@ function doCopy(btn){
     overlay.setAttribute('aria-hidden','true');
 
     if(info){
-      artFly('out', info, running ? running.u : 1, running ? running.k : 1, function(){
+      artFly('out', info, running ? running.u : 1, function(){
         artHardClose();
         artContent.innerHTML = '';
         if(artOpener && document.body.contains(artOpener)){
