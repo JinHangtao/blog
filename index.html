@@ -6446,24 +6446,18 @@ function doCopy(btn){
   function artSmooth(x){ x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
   function artReduced(){ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
 
-  // ══ 背景略微后退（1.5% 缩小 + 轻微压暗，随面板展开进度 u 同步）══
+  // ══ 背景略微后退（只做轻微压暗，不缩放；随面板展开进度 u 同步）══
   // 手机上先自测：展开最初几帧过后若平均帧间隔 > 30ms（低于约 33fps），本次会话自动关闭这一项。
   var artShell = document.querySelector('.shell'), artDim = document.getElementById('artDim');
   var artBgOn = false, artBgTimer = 0, artRecedeOff = false;
-  var RECEDE_SCALE = .015, RECEDE_DIM = .2;
+  var RECEDE_DIM = .16;
   try{ artRecedeOff = sessionStorage.getItem('artRecedeOff') === '1'; }catch(e){}
   if(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) artRecedeOff = true;
 
   function artBg(u){
     if(!artShell || artRecedeOff) return;
     if(artBgTimer){ clearTimeout(artBgTimer); artBgTimer = 0; artShell.style.transition = ''; if(artDim) artDim.style.transition = ''; }
-    if(!artBgOn){                                   // 起点：以视口中心为缩放原点（此时 .shell 还没有 transform）
-      var r = artShell.getBoundingClientRect();
-      artShell.style.transformOrigin = (innerWidth / 2 - r.left).toFixed(1) + 'px ' + (innerHeight / 2 - r.top).toFixed(1) + 'px';
-      artBgOn = true;
-    }
-    artShell.style.willChange = 'transform';
-    artShell.style.transform = 'scale(' + (1 - RECEDE_SCALE * u).toFixed(4) + ')';
+    artBgOn = true;                                 // 只压暗，不缩放、不位移：页面几何尺寸始终不变
     if(artDim) artDim.style.opacity = (RECEDE_DIM * u).toFixed(3);
   }
   function artBgSettle(){ if(artShell) artShell.style.willChange = ''; }       // 展开结束：静止态不需要提升图层
@@ -6478,23 +6472,17 @@ function doCopy(btn){
       if(artDim) artDim.style.transition = '';
     }
     if(animate){
-      artShell.style.transition = 'transform .3s cubic-bezier(.3,.1,.1,1)';
       if(artDim) artDim.style.transition = 'opacity .3s cubic-bezier(.3,.1,.1,1)';
-      artShell.style.transform = ''; if(artDim) artDim.style.opacity = '0';
+      if(artDim) artDim.style.opacity = '0';
       artBgTimer = setTimeout(end, 340);
     } else {
-      artShell.style.transform = ''; if(artDim) artDim.style.opacity = '0';
+      if(artDim) artDim.style.opacity = '0';
       end();
     }
   }
   // 量卡片位置时先暂时去掉背景的缩放，否则收回时终点会偏 1% 左右
   function artMeasureCard(id){
-    if(!artShell || !artBgOn) return artCardInfo(id);
-    var tf = artShell.style.transform;
-    artShell.style.transform = '';
-    var info = artCardInfo(id);
-    artShell.style.transform = tf;
-    return info;
+    return artCardInfo(id);
   }
 
   // ══ 逐段入场：只错开首屏几段（总时长约 0.4s），屏幕外的滚到才显示；缓动与面板同一条 ══
