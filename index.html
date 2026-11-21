@@ -995,6 +995,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .lb-btns button:active{border-color:var(--gold);color:var(--gold);}
 
 .blog-list{display:flex;flex-direction:column;gap:20px}
+.blog-post-clickable{cursor:pointer}
+.blog-post-clickable:focus-visible{outline:1px solid rgba(196,154,82,.5);outline-offset:2px}
+.blog-post-clickable .blog-comments{cursor:auto}
 .blog-post{
   background:var(--card2);
   border:1px solid var(--line2);
@@ -3047,7 +3050,8 @@ if(isTouch){
   }
   function curKick(){ if(!curRun){ curRun=true; requestAnimationFrame(curTick); } }
   document.addEventListener('mouseover',function(e){
-    var t=e.target.closest('a,button,.gi,.gi1,.sb-link,.stat-box,.blog-expand-btn');
+    var t=e.target.closest('a,button,.gi,.gi1,.sb-link,.stat-box,.blog-expand-btn,.blog-post-clickable');
+    if(t && t.classList.contains('blog-post-clickable') && e.target.closest('.blog-comments,input,textarea')) t=null;
     if(t){
       cur.style.transform='translate(-50%,-50%) scale(1.5)';
       curR.style.transform='translate(-50%,-50%) scale(1.55)';
@@ -3055,7 +3059,8 @@ if(isTouch){
     }
   });
   document.addEventListener('mouseout',function(e){
-    var t=e.target.closest('a,button,.gi,.gi1,.sb-link,.stat-box,.blog-expand-btn');
+    var t=e.target.closest('a,button,.gi,.gi1,.sb-link,.stat-box,.blog-expand-btn,.blog-post-clickable');
+    if(t && t.classList.contains('blog-post-clickable') && e.target.closest('.blog-comments,input,textarea')) t=null;
     if(t){
       cur.style.transform='translate(-50%,-50%) scale(1)';
       curR.style.transform='translate(-50%,-50%) scale(1)';
@@ -6030,11 +6035,7 @@ function doCopy(btn){
         (preview ? '<div class="bp-outer"><p class="bp-text" data-full="' + preview.replace(/"/g,'&quot;') + '" style="margin:0;font-family:Jost,sans-serif;font-weight:400;font-size:.82rem;line-height:1.85;color:var(--fg);white-space:normal;word-break:break-word;">' + preview + '</p><div class="bp-grad" style="display:none;position:absolute;bottom:0;left:0;right:0;height:2.8em;background:linear-gradient(to top,rgb(28,26,24) 0%,rgba(28,26,24,.95) 30%,rgba(28,26,24,.5) 65%,transparent 100%);pointer-events:none;"></div></div>' : '') +
         (coverSrc && coverType === 'img' ? '<div class="blog-cover-wrap"><img class="blog-cover-img" src="' + coverSrc + '" loading="lazy" decoding="async" alt=""></div>' : '') +
         (coverSrc && coverType === 'video' ? '<div class="blog-cover-video-preview" style="margin-top:16px;display:flex;justify-content:center;"><video src="' + coverSrc + '" controls playsinline preload="metadata"' + (coverPoster ? ' poster="' + coverPoster + '"' : '') + ' style="max-width:260px;width:100%;height:auto;display:block;border-radius:12px;"></video></div>' : '') +
-        '<div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="blog-open-btn" data-id="' + a.id + '">' +
-          '<span class="btn-text">' + U('Read Full Post') + '</span>' +
-          '<span class="btn-arrow"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
-        '</button></div>' +
-        '<div style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">' +
+        '<div class="blog-comments" style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">' +
           '<div id="cl-' + a.commentId + '" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>' +
           '<div class="comment-row" style="display:flex;gap:8px">' +
             '<input id="cn-' + a.commentId + '" placeholder="' + U('placeholderName') + '" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
@@ -6046,8 +6047,21 @@ function doCopy(btn){
       wrap.appendChild(el);
 
       // 绑定 Read Full 按钮（addEventListener，不用 inline onclick）
-      el.querySelector('.blog-open-btn').addEventListener('click', function(){
+      // 整张卡片可点击进入文章；评论区（名字/留言输入框、发送按钮、评论列表）、
+      // 折叠按钮、视频控件、链接等不触发跳转；若用户正在选中文字也不跳转
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('role', 'link');
+      el.classList.add('blog-post-clickable');
+      var NO_OPEN = '.blog-comments, .blog-expand-btn, video, a, button, input, textarea, select, label';
+      el.addEventListener('click', function(e){
+        if(e.target.closest(NO_OPEN)) return;
+        var sel = window.getSelection && window.getSelection();
+        if(sel && String(sel).length > 0) return;
         openArticle(a.id);
+      });
+      el.addEventListener('keydown', function(e){
+        if(e.target !== el) return;
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openArticle(a.id); }
       });
 
       // 绑定留言发送按钮（addEventListener + 直接传 commentId 变量，不用 inline onclick 字符串拼接，
