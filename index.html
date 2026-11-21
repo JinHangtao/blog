@@ -1482,9 +1482,11 @@ button, a, input, label, [onclick], video {
   z-index:5000;
   display:flex;
   flex-direction:column;
-  background:rgba(13,12,11,0.72);
-  -webkit-backdrop-filter:blur(28px) saturate(1.4);
-  backdrop-filter:blur(28px) saturate(1.4);
+  /* 文章「静止态」背景的唯一来源：飞入 / 飞回时直接复用同一组值，保证前后一致 */
+  --art-rgb:13,12,11; --art-a:.72; --art-blur:blur(28px) saturate(1.4);
+  background:rgba(var(--art-rgb),var(--art-a));
+  -webkit-backdrop-filter:var(--art-blur);
+  backdrop-filter:var(--art-blur);
   opacity:0;
   pointer-events:none;
   visibility:hidden;                       /* 关闭时彻底不可见、不可聚焦、不参与点击命中（淡出结束后才生效） */
@@ -1509,9 +1511,7 @@ button, a, input, label, [onclick], video {
     right:var(--gap);
     border-radius:var(--r);
     border:1px solid var(--line2);
-    background:rgba(22,21,19,0.82);
-    -webkit-backdrop-filter:blur(32px) saturate(1.5);
-    backdrop-filter:blur(32px) saturate(1.5);
+    --art-rgb:22,21,19; --art-a:.82; --art-blur:blur(32px) saturate(1.5);
     overflow:hidden;
   }
 }
@@ -1521,9 +1521,11 @@ button, a, input, label, [onclick], video {
    正文区按 --art-c 渐显；结束后 .art-settle 让纯色层淡出、磨砂底色平滑接管。 */
 #articleOverlay:focus{outline:none}
 #articleOverlay.art-flying{
-  background:transparent !important;
-  -webkit-backdrop-filter:none !important;
-  backdrop-filter:none !important;
+  /* 与静止态同色同透明度同毛玻璃；只用 --art-bg（0→1）控制显现程度，
+     飞到终点时数值恰好等于静止态，所以交接处没有任何跳变 */
+  background:rgba(var(--art-rgb),calc(var(--art-a) * var(--art-bg,1))) !important;
+  -webkit-backdrop-filter:var(--art-blur) !important;
+  backdrop-filter:var(--art-blur) !important;
   border-color:transparent !important;
   transition:none !important;
   pointer-events:none !important;
@@ -1531,25 +1533,10 @@ button, a, input, label, [onclick], video {
 }
 #articleOverlay.art-flying #artTopbar,
 #articleOverlay.art-flying #artScroll{
-  opacity:calc(var(--art-c,0) * .92);
+  opacity:var(--art-c,0);
   transform:scale(var(--art-s,1));
   will-change:transform,opacity;
 }
-/* 飞行期间的底色层：不再是不透明纯色，而是和文章静止态同样的半透明深色（--art-alpha），
-   飞入 / 飞回过程中能隐约透出下面的卡片和页面，与进入文章后的毛玻璃背景衔接得更自然。
-   想更透就调小 --art-alpha（0~1），想更实就调大。 */
-#articleOverlay{--art-alpha:.78;}
-#articleOverlay.art-flying::before,
-#articleOverlay.art-settle::before{
-  content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:rgb(19,18,16);opacity:calc(var(--art-bg,1) * var(--art-alpha));
-}
-/* 飞行结束：半透明底色层淡出的同时，面板自己的半透明底色 + 毛玻璃同步淡入，交接时不跳变 */
-#articleOverlay.art-settle::before{opacity:0;transition:opacity .24s ease;}
-#articleOverlay.art-on.art-settle{
-  transition:background-color .24s ease, border-color .24s ease, opacity .35s ease, transform .35s ease, visibility 0s;
-}
-@media(prefers-reduced-motion:reduce){#articleOverlay.art-settle::before{transition-duration:.01s}}
 
 /* 背景略微后退时的压暗层：在页面之上、文章面板之下；幅度由 JS 随展开进度驱动 */
 #artDim{position:fixed;inset:0;z-index:4999;background:#000;opacity:0;pointer-events:none;}
