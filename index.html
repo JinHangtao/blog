@@ -2049,15 +2049,6 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
 }
 /* 入场完成后释放动画层（fill:both 会让 sb/main 永久保留合成层与 stacking context） */
 .intro-done .sb,.intro-done .main,.intro-done .sb > *,.intro-done #starsBg,.intro-done .sb-av{animation:none !important;}
-/* 桌面端：让这些元素「始终」是独立合成层。
-   入场动画结束时若图层被回收（动画层→普通层），文字/头像会被重新栅格化并产生 1~3px 的位移；
-   常驻图层则前后渲染方式完全一致，就不会再有那一下抖动。
-   用 will-change:opacity 给 .main，避免 transform 让 .main 变成 fixed 子元素的包含块。 */
-@media (min-width:769px) and (hover:hover){
-  .sb,.sb > *,.sb-av{will-change:transform;}
-  .main{will-change:opacity;}
-  .ph-reveal.in{will-change:opacity,transform;}
-}
 /* 进场期间被打断：之后新触发的过渡直接快进收尾 */
 .intro-skip .ph-reveal,.intro-skip .ph-word,.intro-skip .ph-n,.intro-skip .ph-sub,.intro-skip .ph-rule{
   transition-duration:.28s!important;transition-delay:0s!important;
@@ -2472,34 +2463,34 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
   </div>
 
   <div class="sb-card sb-nav">
-    <a class="sb-link on" href="#" onclick="show('about',this);return false;">
+    <a class="sb-link on"  role="button" tabindex="0" onclick="show('about',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">About</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('blog',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('blog',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Blog</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('gallery',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('gallery',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Gallery</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('3d',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('3d',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">3D Modeling</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('photo',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('photo',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Photography</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('ai',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('ai',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">AI · ComfyUI</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('sound',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('sound',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Sound Design</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('ps',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('ps',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Graphic Design</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('video',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('video',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Video</span>
     </a>
-    <a class="sb-link" href="#" onclick="show('stmt',this);return false;">
+    <a class="sb-link"  role="button" tabindex="0" onclick="show('stmt',this);return false;">
       <div class="sb-dot"></div><span class="sb-link-txt">Statement</span>
     </a>
     <div class="sb-foot">© Jin Hangtao. All rights reserved.</div>
@@ -2511,16 +2502,16 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
 <main class="main">
 
   <div class="topbar">
-    <a class="tab on" href="#" onclick="show('about',this);return false;">About</a>
-    <a class="tab"    href="#" onclick="show('blog',this);return false;">Blog</a>
-    <a class="tab"    href="#" onclick="show('gallery',this);return false;">Gallery</a>
-    <a class="tab"    href="#" onclick="show('3d',this);return false;">3D</a>
-    <a class="tab"    href="#" onclick="show('photo',this);return false;">Photo</a>
-    <a class="tab"    href="#" onclick="show('ai',this);return false;">AI</a>
-    <a class="tab"    href="#" onclick="show('sound',this);return false;">Sound</a>
-    <a class="tab"    href="#" onclick="show('ps',this);return false;">Graphic</a>
-    <a class="tab"    href="#" onclick="show('video',this);return false;">Video</a>
-    <a class="tab"    href="#" onclick="show('stmt',this);return false;">Statement</a>
+    <a class="tab on"  role="button" tabindex="0" onclick="show('about',this);return false;">About</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('blog',this);return false;">Blog</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('gallery',this);return false;">Gallery</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('3d',this);return false;">3D</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('photo',this);return false;">Photo</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('ai',this);return false;">AI</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('sound',this);return false;">Sound</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('ps',this);return false;">Graphic</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('video',this);return false;">Video</a>
+    <a class="tab"     role="button" tabindex="0" onclick="show('stmt',this);return false;">Statement</a>
     <button type="button" class="lang-btn" aria-haspopup="true" aria-expanded="false" aria-label="Language"><span class="lang-cur">LANG</span></button>
     <div id="tabIndicator"></div>
 </div>
@@ -8234,6 +8225,12 @@ document.addEventListener('click',function(e){
       return o;
     }};
 })();
+</script>
+<style>.sb-link,.tab{cursor:pointer}</style>
+<script>
+document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forEach(function(a){
+  a.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); a.click(); } });
+});
 </script>
 </body>
 </html>
