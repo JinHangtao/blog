@@ -1531,16 +1531,24 @@ button, a, input, label, [onclick], video {
 }
 #articleOverlay.art-flying #artTopbar,
 #articleOverlay.art-flying #artScroll{
-  opacity:var(--art-c,0);
+  opacity:calc(var(--art-c,0) * .92);
   transform:scale(var(--art-s,1));
   will-change:transform,opacity;
 }
+/* 飞行期间的底色层：不再是不透明纯色，而是和文章静止态同样的半透明深色（--art-alpha），
+   飞入 / 飞回过程中能隐约透出下面的卡片和页面，与进入文章后的毛玻璃背景衔接得更自然。
+   想更透就调小 --art-alpha（0~1），想更实就调大。 */
+#articleOverlay{--art-alpha:.78;}
 #articleOverlay.art-flying::before,
 #articleOverlay.art-settle::before{
   content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:rgb(19,18,16);opacity:var(--art-bg,1);
+  background:rgb(19,18,16);opacity:calc(var(--art-bg,1) * var(--art-alpha));
 }
+/* 飞行结束：半透明底色层淡出的同时，面板自己的半透明底色 + 毛玻璃同步淡入，交接时不跳变 */
 #articleOverlay.art-settle::before{opacity:0;transition:opacity .24s ease;}
+#articleOverlay.art-on.art-settle{
+  transition:background-color .24s ease, border-color .24s ease, opacity .35s ease, transform .35s ease, visibility 0s;
+}
 @media(prefers-reduced-motion:reduce){#articleOverlay.art-settle::before{transition-duration:.01s}}
 
 /* 背景略微后退时的压暗层：在页面之上、文章面板之下；幅度由 JS 随展开进度驱动 */
