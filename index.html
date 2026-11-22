@@ -2048,6 +2048,13 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
 html,body{text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 /* 入场完成后释放动画层（fill:both 会让 sb/main 永久保留合成层与 stacking context） */
 .intro-done .sb,.intro-done .main,.intro-done .sb > *,.intro-done #starsBg,.intro-done .sb-av{animation:none !important;}
+/* 修复：入场结束后左侧栏文字突然变亮。
+   原因：入场期间侧栏各卡片因 transform 动画处于独立合成层，文字在该层里栅格化；
+   intro-done 撤掉 animation 后合成层被释放，文字被重新栅格化到页面主层，灰度/对比度变了，看起来「突然变亮」。
+   做法：让侧栏及其卡片从一开始就常驻合成层（仅 1+4 层，开销可忽略），动画撤掉前后渲染路径一致，不再重栅格化。 */
+@media (hover:hover),(hover:none){
+  .sb,.sb > *{will-change:transform;}
+}
 /* 进场期间被打断：之后新触发的过渡直接快进收尾 */
 .intro-skip .ph-reveal,.intro-skip .ph-word,.intro-skip .ph-n,.intro-skip .ph-sub,.intro-skip .ph-rule{
   transition-duration:.28s!important;transition-delay:0s!important;
