@@ -342,13 +342,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 }
 @keyframes sbFade{from{opacity:0;}to{opacity:1;}}
 @keyframes sbMove{
-  from{transform:translateX(-18px) scale(.985);}
-  to  {transform:translateX(0) scale(1);}
+  from{transform:translateX(-18px);}
+  to  {transform:translateX(0);}
 }
 @keyframes mainFade{from{opacity:0;}to{opacity:1;}}
 @keyframes mainMove{
-  from{transform:translateX(14px) scale(.99);}
-  to  {transform:translateX(0) scale(1);}
+  from{transform:translateX(14px);}
+  to  {transform:translateX(0);}
 }
 
 /* 侧栏卡片：逐张错峰，模糊 → 清晰，弹簧落位 */
@@ -386,7 +386,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 .sb > *:nth-child(3){--d:400ms;--b:calc(var(--blur-in) * 1.2);}
 .sb > *:nth-child(n+4){--d:480ms;--b:calc(var(--blur-in) * 1.2);}
 @keyframes itemFade{from{opacity:0;}}
-@keyframes itemMove{from{transform:translateY(12px) scale(.98);}}
+@keyframes itemMove{from{transform:translateY(12px);}}
 
 /* 背景星空：入场只淡入（不做 scale，避免整张大 canvas 被重新合成/缩放） */
 .reveal-ready #starsBg{
@@ -397,14 +397,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 /* about panel 内容逐段错开 */
 .ph-reveal{
   opacity:0;
-  transform:translateY(18px) scale(.992);
+  transform:translateY(18px);
   transition:opacity .8s var(--ease-out),
              transform 1.25s var(--spring);
   will-change:opacity,transform;
 }
 /* 标题块：主体，最先出现，模糊更轻，对焦更快 */
 .ph-reveal.ph-focal{
-  transform:translateY(10px) scale(.996);
+  transform:translateY(10px);
   filter:blur(3px);
   transition:opacity .55s var(--ease-out),
              filter .65s var(--ease-out),
@@ -412,7 +412,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 }
 .ph-reveal.in{
   opacity:1;
-  transform:translateY(0) scale(1);
+  transform:translateY(0);
   filter:none;
   will-change:auto;
 }
@@ -2044,6 +2044,8 @@ img.pi[data-pi].pi-fast{transform:none!important;filter:var(--pi-f,none)!importa
   .panel{filter:none!important;}
   .ph-reveal,.ph-word{transition-duration:.2s!important;transform:none!important;}
 }
+/* 文字渲染统一：无论元素是否处于合成层（动画中/动画后），字形都用同一套亚像素定位，避免入场结束时整屏文字微移 */
+html,body{text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 /* 入场完成后释放动画层（fill:both 会让 sb/main 永久保留合成层与 stacking context） */
 .intro-done .sb,.intro-done .main,.intro-done .sb > *,.intro-done #starsBg,.intro-done .sb-av{animation:none !important;}
 /* 进场期间被打断：之后新触发的过渡直接快进收尾 */
