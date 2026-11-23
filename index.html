@@ -8261,18 +8261,17 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
 html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;user-select:none !important}
 </style>
 <script id="tab-scrub-js">
-/* ═══ 手指拖动切换 tab · 连续版 ═══
-   不再「一格一格跳」：金条是一颗带弹簧物理的液态光条，跟着手指连续滑动，
-   经过相邻两个 tab 时宽度在两者之间平滑变形，快速拖动时会被拉长，带轻微磁吸；
-   每个 tab 的金色高亮 / 放大 / 字距按金条的位置连续渐变（软边扫光），没有任何瞬间切换；
-   松手后金条带一点回弹落到最近的 tab，此时才真正切换内容页。
-   触发（触屏/触控笔）：按在当前高亮 tab 上横向一拖；或在任意 tab 上长按约 0.26 秒再拖。
-   触发（电脑鼠标）：在任意 tab 上按住左键，横向拖动超过几像素即进入拖动；单击仍是原来的点击切换。 */
+/* ═══ 手指/鼠标拖动切换 tab · 连续版（v3：更稳、不抖）═══
+   金条是一颗带弹簧物理的液态光条，跟着手指连续滑动，经过相邻 tab 时宽度平滑变形，快速拖动会被拉长，磁吸连续（无跳变）。
+   每个 tab 的金色扫光 / 放大按金条位置连续渐变；松手后金条带回弹落位，此时才真正切换内容页。
+   防抖要点：拖动过程中不改字距（不触发任何重排）、布局只测一次并缓存、固定步长弹簧（不受刷新率影响）、
+   金条只用 transform（合成层，不触发布局）、只写入发生变化的 tab、磁吸用连续曲线（没有中点处的目标跳变）。
+   触发：触屏——按在当前高亮 tab 上横向拖，或长按约 0.26 秒再拖；鼠标——任意 tab 按住左键横向拖。 */
 (function(){
   var bar=document.querySelector('.topbar'), ind=document.getElementById('tabIndicator');
   if(!bar||!ind) return;
-  var HOLD=260, MOVE_SLOP=10, ACT_SLOP=6, EDGE=46, SC=0.08;
-  var K=420, ZETA=0.78, C=2*ZETA*Math.sqrt(K), MAGNET=0.35;
+  var HOLD=260, MOVE_SLOP=10, ACT_SLOP=6, EDGE=46, SC=0.08, IW=100;
+  var K=420, ZETA=0.78, C=2*ZETA*Math.sqrt(K), H=1/240, M=0.6;
   var GOLD_IMG='linear-gradient(to right, var(--gold) 33.33%, var(--fg-d) 66.67%)';
   var S=null, suppressUntil=0;
 
@@ -8280,18 +8279,13 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
   function idOf(t){ var m=(t.getAttribute('onclick')||'').match(/show\('([^']+)'/); return m?m[1]:null; }
   function vib(n){ try{ if(navigator.vibrate) navigator.vibrate(n); }catch(e){} }
   function smooth(g){ return g*g*(3-2*g); }
-
-  /* 读取当前布局：每个 tab 的视觉中心（扣掉尾部字距）和金条宽度 */
-  function geo(list){
+  function warp(t){ return t-(M/(2*Math.PI))*Math.sin(2*Math.PI*t); }   /* 连续磁吸：中心附近“粘”，中点处“快过” */
+  function lsOf(list){ return list.map(function(t){ return parseFloat(getComputedStyle(t).letterSpacing)||0; }); }
+  function measure(list,ls){
     var c=[], w=[];
-    for(var i=0;i<list.length;i++){
-      var t=list[i], ls=S&&S.ls?S.ls[i]:(parseFloat(getComputedStyle(t).letterSpacing)||0);
-      c.push(t.offsetLeft+t.offsetWidth/2-ls/2);
-      w.push(t.offsetWidth*(1+SC));
-    }
+    for(var i=0;i<list.length;i++){ var t=list[i]; c.push(t.offsetLeft+t.offsetWidth/2-ls[i]/2); w.push(t.offsetWidth*(1+SC)); }
     return {c:c,w:w};
   }
-  /* pos 落在哪两个 tab 中心之间：返回 {k,u}，u∈[0,1] */
   function seg(c,pos){
     var n=c.length; if(n<2) return {k:0,u:0};
     if(pos<=c[0]) return {k:0,u:0};
@@ -8301,6 +8295,11 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
   }
   function nearest(c,x){ var b=0,d=1e9; for(var i=0;i<c.length;i++){ var e=Math.abs(c[i]-x); if(e<d){d=e;b=i;} } return b; }
 
+  function paint(list,i,e){
+    var st=list[i].style;
+    st.backgroundPosition=((1-e)*100)+'% 0';
+    st.transform='translateZ(0) scale('+(1+SC*e)+')';
+  }
   function clearTabs(list){
     list.forEach(function(t){
       t.style.transition=''; t.style.backgroundImage=''; t.style.backgroundSize='';
@@ -8314,8 +8313,9 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
     if(s.phase==='armed'){ clearTimeout(s.timer); return; }
     clearTabs(list);
     bar.classList.remove('tab-scrubbing'); document.documentElement.classList.remove('tab-scrubbing');
-    var t=bar.querySelector('.tab.on')||s.target;     /* 已回到纯 CSS 状态，按真实布局把金条精确落位 */
-    if(t){
+    var t=bar.querySelector('.tab.on')||s.target;
+    ind.style.transformOrigin='';
+    if(t){                                             /* 切回常规的「宽度 + 平移」表示，几何与拖动末帧完全一致 */
       var ls=parseFloat(getComputedStyle(t).letterSpacing)||0, vw=t.offsetWidth*(1+SC);
       var cx=t.offsetLeft+t.offsetWidth/2-ls/2;
       ind.style.transition=''; ind.style.opacity='1'; ind.style.filter='blur(0.5px)';
@@ -8325,76 +8325,62 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
 
   function frame(ts){
     if(!S||S.phase==='armed') return;
-    var dt=(ts&&S.t)?Math.min(0.033,(ts-S.t)/1000):(ts?0.016:0);
-    if(ts) S.t=ts;
-    var list=tabList(), g=geo(list), n=list.length, r=bar.getBoundingClientRect();
+    var list=S.list, n=list.length, g=S.g, c=g.c, r=bar.getBoundingClientRect();
+    var fresh=false;
+    if(ts){ var el=S.t?Math.min(0.05,(ts-S.t)/1000):0.016; S.t=ts; S.acc+=el; fresh=true; }
 
-    /* 贴近边缘自动滚动（越靠边越快，二次曲线） */
+    var target;
     if(S.phase==='drag'){
       var v=0;
       if(S.cx<r.left+EDGE) v=-Math.pow((r.left+EDGE-S.cx)/EDGE,2)*16;
       else if(S.cx>r.right-EDGE) v=Math.pow((S.cx-(r.right-EDGE))/EDGE,2)*16;
-      if(v) bar.scrollLeft+=v;
-    }
-
-    /* 目标位置：拖动时=手指（带磁吸、夹在首尾 tab 中心之间）；松手后=目标 tab 的中心 */
-    var target;
-    if(S.phase==='drag'){
-      var fx=S.cx-r.left+bar.scrollLeft;
-      var cn=g.c[nearest(g.c,fx)];
-      target=fx+(cn-fx)*MAGNET;
-      target=Math.max(g.c[0],Math.min(g.c[n-1],target));
-      var ni=nearest(g.c,fx); if(ni!==S.near){ if(S.near!=null) vib(4); S.near=ni; }
-      S.fx=fx;
+      if(v && fresh){ S.sl+=v; bar.scrollLeft=S.sl; S.sl=bar.scrollLeft; }
+      var fx=S.cx-r.left+S.sl; S.fx=fx;
+      var ni=nearest(c,fx); if(ni!==S.near){ if(S.near!=null) vib(4); S.near=ni; }
+      var sg0=seg(c,fx); target=c[sg0.k]+warp(sg0.u)*(c[sg0.k+1]-c[sg0.k]);
+      if(fx<=c[0]) target=c[0]; else if(fx>=c[n-1]) target=c[n-1];
     } else {
-      target=g.c[list.indexOf(S.target)];
+      target=c[list.indexOf(S.target)];
     }
 
-    /* 弹簧积分（两个子步，稳定） */
-    if(dt>0){
-      for(var q=0;q<2;q++){
-        var h=dt/2, a=K*(target-S.pos)-C*S.vel;
-        S.vel+=a*h; S.pos+=S.vel*h;
-      }
+    /* 固定步长弹簧：与屏幕刷新率无关，60/90/120Hz 手感一致 */
+    var steps=0;
+    while(S.acc>=H && steps<20){
+      var a=K*(target-S.pos)-C*S.vel; S.vel+=a*H; S.pos+=S.vel*H; S.acc-=H; steps++;
     }
-    var sg=seg(g.c,S.pos), k=sg.k, u=sg.u;
-    var width=g.w[k]+(g.w[k+1]-g.w[k])*u;
-    var stretchT=Math.min(Math.abs(S.vel)*0.05,24);   /* 速度越快越拉长 */
-    S.sw+=(stretchT-S.sw)*0.22;
-    width+=S.sw;
+    if(fresh) S.sw+=(Math.min(Math.abs(S.vel)*0.05,24)-S.sw)*0.22;
 
-    /* 每个 tab 的连续状态：只有相邻两个 tab 分到权重（总和=1），松手/起点处与纯 CSS 状态完全一致 */
-    for(var i=0;i<n;i++){
-      var gw=(i===k)?(1-u):(i===k+1?u:0);
-      if(n<2) gw=1;
-      var e=smooth(gw), t=list[i], st=t.style;
-      st.transition='none';
-      st.backgroundImage=GOLD_IMG; st.backgroundSize='300% 100%';
-      st.backgroundPosition=((1-e)*100)+'% 0';
-      st.transform='translateZ(0) scale('+(1+SC*e)+')';
-      var lsv=S.base+(S.on-S.base)*e; st.letterSpacing=lsv+'px'; S.ls[i]=lsv;
+    var sg=seg(c,S.pos), k=sg.k, u=sg.u;
+    var width=g.w[k]+(g.w[k+1]-g.w[k])*u+S.sw;
+
+    for(var i=0;i<n;i++){                              /* 只有相邻两个 tab 有权重；只写发生变化的 */
+      var gw=(i===k)?(1-u):(i===k+1?u:0); if(n<2) gw=1;
+      var e=smooth(gw);
+      if(S.le[i]!==e && (isNaN(S.le[i]) || Math.abs(S.le[i]-e)>0.0004 || (e===0||e===1))){ paint(list,i,e); S.le[i]=e; }
     }
 
     ind.style.transition='none'; ind.style.opacity='1'; ind.style.filter='blur(0.5px)';
-    ind.style.width=width+'px';
-    ind.style.transform='translateX('+(S.pos-width/2)+'px)';
+    ind.style.width=IW+'px'; ind.style.transformOrigin='0 50%';
+    ind.style.transform='translate3d('+(S.pos-width/2)+'px,0,0) scaleX('+(width/IW)+')';
 
-    if(S.phase==='settle' && dt>0 && Math.abs(target-S.pos)<0.2 && Math.abs(S.vel)<2 && S.sw<0.4){ finalize(); return; }
-    S.raf=requestAnimationFrame(frame);
+    if(S.phase==='settle' && fresh && Math.abs(target-S.pos)<0.2 && Math.abs(S.vel)<2 && S.sw<0.4){ finalize(); return; }
+    if(fresh || !S.raf) S.raf=requestAnimationFrame(frame);
   }
 
   function begin(){
     if(!S||S.phase!=='armed') return;
     var list=tabList(), orig=bar.querySelector('.tab.on')||S.tab;
-    var other=list.filter(function(t){return t!==orig;})[0]||orig;
+    S.list=list; S.ls=lsOf(list); S.g=measure(list,S.ls);
+    S.phase='drag'; S.orig=orig; S.t=0; S.acc=0; S.vel=0; S.sw=0; S.near=null; S.sl=bar.scrollLeft;
+    S.pos=S.g.c[list.indexOf(orig)]; S.le=list.map(function(){return NaN;});
+    list.forEach(function(t){ t.style.transition='none'; t.style.backgroundImage=GOLD_IMG; t.style.backgroundSize='300% 100%'; });
+    list.forEach(function(t,i){ var e=(t===orig)?1:0; paint(list,i,e); S.le[i]=e; });
+    var ow=S.g.w[list.indexOf(orig)];
+    ind._tok=(ind._tok||0)+1;
+    ind.style.transition='none'; ind.style.width=IW+'px'; ind.style.transformOrigin='0 50%';
+    ind.style.transform='translate3d('+(S.pos-ow/2)+'px,0,0) scaleX('+(ow/IW)+')';
     bar.classList.add('tab-scrubbing'); document.documentElement.classList.add('tab-scrubbing');
     if(S.mouse){ try{ bar.setPointerCapture(S.pid); }catch(e){} }
-    S.phase='drag'; S.orig=orig; S.t=0; S.vel=0; S.sw=0; S.near=null;
-    S.on=parseFloat(getComputedStyle(orig).letterSpacing)||0;
-    S.base=parseFloat(getComputedStyle(other).letterSpacing)||0;
-    S.ls=list.map(function(t){ return parseFloat(getComputedStyle(t).letterSpacing)||0; });
-    var g=geo(list); S.pos=g.c[list.indexOf(orig)];
-    ind._tok=(ind._tok||0)+1;                     /* 取消 moveIndicator 尚未执行的分段动画 */
     vib(12);
     S.raf=requestAnimationFrame(frame);
   }
@@ -8403,19 +8389,27 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
     if(!S) return;
     if(S.phase==='armed'){ finalize(); return; }
     if(S.phase!=='drag') return;
-    var list=tabList(), g=geo(list);
-    var t=list[nearest(g.c,S.fx!=null?S.fx:S.pos)];
+    var list=S.list, c=S.g.c;
+    var t=list[nearest(c,(S.fx!=null?S.fx:S.pos)+S.vel*0.06)];   /* 带一点惯性：轻甩可以多滑一格 */
     S.phase='settle'; S.target=t; suppressUntil=Date.now()+450;
     var id=idOf(t);
     if(t!==S.orig && id && typeof show==='function'){
-      show(id,t);                                  /* 这时才切换内容页 */
-      ind._tok=(ind._tok||0)+1;                    /* 取消 show→moveIndicator 的随机分段动画 */
+      var before=list.map(function(x){return x.offsetLeft;});
+      show(id,t);                                      /* 这时才切换内容页 */
+      ind._tok=(ind._tok||0)+1;                        /* 取消 show→moveIndicator 的随机分段动画 */
+      S.ls=lsOf(list); S.g=measure(list,S.ls);         /* 选中态字距变了，重测一次 */
+      list.forEach(function(x,i){                      /* FLIP：字距变化引起的位移改成平滑滑动，不是瞬间跳 */
+        var d=before[i]-x.offsetLeft;
+        if(Math.abs(d)>0.5 && x.animate) x.animate([{translate:d+'px 0px'},{translate:'0px 0px'}],{duration:340,easing:'cubic-bezier(.22,.8,.2,1)'});
+      });
+      S.le=list.map(function(){return NaN;});          /* show() 会清掉目标 tab 的内联样式，强制重写 */
+      list.forEach(function(x){ x.style.transition='none'; x.style.backgroundImage=GOLD_IMG; x.style.backgroundSize='300% 100%'; });
     }
     var tl=t.offsetLeft, tr=tl+t.offsetWidth;
     if(tl<bar.scrollLeft+28) bar.scrollTo({left:Math.max(0,tl-28),behavior:'smooth'});
     else if(tr>bar.scrollLeft+bar.clientWidth-28) bar.scrollTo({left:tr-bar.clientWidth+28,behavior:'smooth'});
-    S.t=0; frame(0);                               /* 同帧立刻接管，避免露出 moveIndicator 的中间状态 */
-    S.t=0; cancelAnimationFrame(S.raf); S.raf=requestAnimationFrame(frame);
+    S.t=0; S.acc=0; frame(0);                          /* 同帧立刻接管 */
+    cancelAnimationFrame(S.raf); S.raf=requestAnimationFrame(frame);
   }
 
   bar.addEventListener('pointerdown',function(e){
@@ -8425,7 +8419,7 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
     var t=e.target.closest&&e.target.closest('.tab'); if(!t) return;
     if(S) finalize();
     S={phase:'armed',mouse:mouse,pid:e.pointerId,cx:e.clientX,x0:e.clientX,y0:e.clientY,tab:t,activeStart:t.classList.contains('on'),timer:0,raf:0};
-    if(!mouse) S.timer=setTimeout(begin,HOLD);       /* 鼠标不需要长按，拖动超过阈值即开始 */
+    if(!mouse) S.timer=setTimeout(begin,HOLD);
   },{passive:true});
 
   bar.addEventListener('pointermove',function(e){
@@ -8439,7 +8433,7 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
       return;
     }
     if(S.activeStart && dx>ACT_SLOP && dx>dy){ clearTimeout(S.timer); begin(); return; }
-    if(dx>MOVE_SLOP||dy>MOVE_SLOP){ clearTimeout(S.timer); S=null; }     /* 普通滑动/滚动：放行 */
+    if(dx>MOVE_SLOP||dy>MOVE_SLOP){ clearTimeout(S.timer); S=null; }
   },{passive:true});
 
   bar.addEventListener('pointerup',release,{passive:true});
@@ -8460,24 +8454,24 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
 .sb-nav .sb-link.on{touch-action:pan-x}
 </style>
 <script id="side-scrub-js">
-/* ═══ 左侧竖向导航 · 拖动切换（和顶部 tab 同一套连续手感，方向改为纵向）═══
-   · 一块带弹簧的高亮块（和行选中底色同色）跟着鼠标/手指上下连续滑动，经过相邻两行时高度平滑变形，快速拖动会被拉长，带轻微磁吸
-   · 每一行左边的小圆点、文字颜色按高亮块位置连续渐变（灰↔金 / 灰↔米白），没有瞬间切换
-   · 松手后高亮块带回弹落到最近一行，此时才真正切换内容页；顶部 tab 栏随之同步
-   · 鼠标：任意一行按住左键纵向拖动即可；触屏：按在当前行纵向拖，或长按 0.26 秒再拖 */
+/* ═══ 左侧竖向导航 · 拖动切换（v3：和顶部同一套防抖逻辑，方向为纵向）═══
+   一块带弹簧的高亮块（与选中行同色）跟着鼠标/手指上下连续滑动，经过相邻两行时高度平滑变形，快速拖动被拉长，磁吸连续；
+   小圆点、文字颜色按高亮块位置连续渐变；松手后带回弹落到最近一行，此时才切换内容页，顶部 tab 同步。
+   防抖：布局只测一次并缓存、固定步长弹簧、只写入变化的行、连续磁吸曲线。 */
 (function(){
   var nav=document.querySelector('.sb-nav'); if(!nav) return;
   var HOLD=260, MOVE_SLOP=10, ACT_SLOP=6;
-  var K=420, ZETA=0.78, C=2*ZETA*Math.sqrt(K), MAGNET=0.35;
+  var K=420, ZETA=0.78, C=2*ZETA*Math.sqrt(K), H=1/240, M=0.6;
   var S=null, pill=null, suppressUntil=0;
 
   function rows(){ return [].slice.call(nav.querySelectorAll('.sb-link')); }
   function idOf(t){ var m=(t.getAttribute('onclick')||'').match(/show\('([^']+)'/); return m?m[1]:null; }
   function smooth(g){ return g*g*(3-2*g); }
-  function geo(list){
+  function warp(t){ return t-(M/(2*Math.PI))*Math.sin(2*Math.PI*t); }
+  function measure(list){
     var nr=nav.getBoundingClientRect(), c=[], h=[];
     list.forEach(function(r){ var b=r.getBoundingClientRect(); c.push(b.top-nr.top-nav.clientTop+b.height/2); h.push(b.height); });
-    return {c:c,h:h,top:nr.top};
+    return {c:c,h:h};
   }
   function seg(c,pos){
     var n=c.length; if(n<2) return {k:0,u:0};
@@ -8488,6 +8482,11 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
   }
   function nearest(c,x){ var b=0,d=1e9; for(var i=0;i<c.length;i++){ var e=Math.abs(c[i]-x); if(e<d){d=e;b=i;} } return b; }
   function parts(r){ return {dot:r.querySelector('.sb-dot'),txt:r.querySelector('.sb-link-txt')}; }
+  function paint(S,i,e){
+    var p=S.parts[i], pc=(e*100).toFixed(2)+'%';
+    if(p.dot) p.dot.style.background='color-mix(in srgb, var(--gold) '+pc+', var(--fg-dd))';
+    if(p.txt) p.txt.style.color='color-mix(in srgb, var(--parch) '+pc+', var(--fg-d))';
+  }
   function clearRows(list){
     list.forEach(function(r){
       r.style.transition=''; r.style.background='';
@@ -8506,7 +8505,7 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
     document.documentElement.classList.remove('tab-scrubbing');
     clearRows(list); removePill();
     var t=nav.querySelector('.sb-link.on');
-    if(t){                                           /* 高亮块消失的同一刻，由行自己的底色无缝接管，避免闪一下 */
+    if(t){                                             /* 高亮块消失的同一刻，由行自己的底色无缝接管 */
       t.style.transition='none'; t.style.background='var(--card2)';
       void nav.offsetWidth;
       requestAnimationFrame(function(){ t.style.transition=''; t.style.background=''; });
@@ -8515,49 +8514,52 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
 
   function frame(ts){
     if(!S||S.phase==='armed') return;
-    var dt=(ts&&S.t)?Math.min(0.033,(ts-S.t)/1000):(ts?0.016:0);
-    if(ts) S.t=ts;
-    var list=rows(), g=geo(list), n=list.length, target;
+    var list=S.list, n=list.length, g=S.g, c=g.c, fresh=false;
+    if(ts){ var el=S.t?Math.min(0.05,(ts-S.t)/1000):0.016; S.t=ts; S.acc+=el; fresh=true; }
+    var target;
     if(S.phase==='drag'){
-      var fy=S.cy-g.top-nav.clientTop;
-      var ni=nearest(g.c,fy), cn=g.c[ni];
-      target=fy+(cn-fy)*MAGNET;
-      target=Math.max(g.c[0],Math.min(g.c[n-1],target));
-      S.fy=fy;
+      var nr=nav.getBoundingClientRect();
+      var fy=S.cy-nr.top-nav.clientTop; S.fy=fy;
+      var sg0=seg(c,fy); target=c[sg0.k]+warp(sg0.u)*(c[sg0.k+1]-c[sg0.k]);
+      if(fy<=c[0]) target=c[0]; else if(fy>=c[n-1]) target=c[n-1];
     } else {
-      target=g.c[list.indexOf(S.target)];
+      target=c[list.indexOf(S.target)];
     }
-    if(dt>0){
-      for(var q=0;q<2;q++){ var h=dt/2, a=K*(target-S.pos)-C*S.vel; S.vel+=a*h; S.pos+=S.vel*h; }
+    var steps=0;
+    while(S.acc>=H && steps<20){
+      var a=K*(target-S.pos)-C*S.vel; S.vel+=a*H; S.pos+=S.vel*H; S.acc-=H; steps++;
     }
-    var sg=seg(g.c,S.pos), k=sg.k, u=sg.u;
-    var height=g.h[k]+(g.h[k+1]-g.h[k])*u;
-    S.sh+=(Math.min(Math.abs(S.vel)*0.04,18)-S.sh)*0.22;
-    height+=S.sh;
+    if(fresh) S.sh+=(Math.min(Math.abs(S.vel)*0.04,18)-S.sh)*0.22;
+    var sg=seg(c,S.pos), k=sg.k, u=sg.u;
+    var height=g.h[k]+(g.h[k+1]-g.h[k])*u+S.sh;
     for(var i=0;i<n;i++){
       var gw=(i===k)?(1-u):(i===k+1?u:0); if(n<2) gw=1;
-      var e=smooth(gw), r=list[i], p=parts(r), pc=(e*100).toFixed(2)+'%';
-      r.style.transition='none'; r.style.background='transparent';
-      if(p.dot){ p.dot.style.transition='none'; p.dot.style.background='color-mix(in srgb, var(--gold) '+pc+', var(--fg-dd))'; }
-      if(p.txt){ p.txt.style.transition='none'; p.txt.style.color='color-mix(in srgb, var(--parch) '+pc+', var(--fg-d))'; }
+      var e=smooth(gw);
+      if(S.le[i]!==e && (isNaN(S.le[i]) || Math.abs(S.le[i]-e)>0.0004 || (e===0||e===1))){ paint(S,i,e); S.le[i]=e; }
     }
-    if(pill) pill.style.transform='translateY('+(S.pos-height/2)+'px)', pill.style.height=height+'px';
-    if(S.phase==='settle' && dt>0 && Math.abs(target-S.pos)<0.2 && Math.abs(S.vel)<2 && S.sh<0.4){ finalize(); return; }
-    S.raf=requestAnimationFrame(frame);
+    if(pill){ pill.style.transform='translate3d(0,'+(S.pos-height/2)+'px,0)'; pill.style.height=height+'px'; }
+    if(S.phase==='settle' && fresh && Math.abs(target-S.pos)<0.2 && Math.abs(S.vel)<2 && S.sh<0.4){ finalize(); return; }
+    if(fresh || !S.raf) S.raf=requestAnimationFrame(frame);
   }
 
   function begin(){
     if(!S||S.phase!=='armed') return;
     var list=rows(), orig=nav.querySelector('.sb-link.on')||S.row;
-    var g=geo(list), i0=list.indexOf(orig), cs=getComputedStyle(orig), nr=nav.getBoundingClientRect(), ob=orig.getBoundingClientRect();
+    var g=measure(list), i0=list.indexOf(orig), cs=getComputedStyle(orig), nr=nav.getBoundingClientRect(), ob=orig.getBoundingClientRect();
     pill=document.createElement('div');
     pill.style.cssText='position:absolute;top:0;pointer-events:none;z-index:-1;background:var(--card2);will-change:transform,height;'+
       'left:'+(ob.left-nr.left-nav.clientLeft)+'px;width:'+ob.width+'px;border-radius:'+cs.borderRadius+';'+
-      'height:'+ob.height+'px;transform:translateY('+(g.c[i0]-ob.height/2)+'px)';
+      'height:'+ob.height+'px;transform:translate3d(0,'+(g.c[i0]-ob.height/2)+'px,0)';
     nav.insertBefore(pill,nav.firstChild);
     document.documentElement.classList.add('tab-scrubbing');
     if(S.mouse){ try{ nav.setPointerCapture(S.pid); }catch(e){} }
-    S.phase='drag'; S.orig=orig; S.t=0; S.vel=0; S.sh=0; S.pos=g.c[i0];
+    S.list=list; S.g=g; S.parts=list.map(parts); S.phase='drag'; S.orig=orig; S.t=0; S.acc=0; S.vel=0; S.sh=0; S.pos=g.c[i0];
+    S.le=list.map(function(){return NaN;});
+    list.forEach(function(r,i){                         /* 一次性接管所有行的底色/圆点/文字，之后只写变化的行 */
+      r.style.transition='none'; r.style.background='transparent';
+      var p=S.parts[i]; if(p.dot) p.dot.style.transition='none'; if(p.txt) p.txt.style.transition='none';
+      var e=(r===orig)?1:0; paint(S,i,e); S.le[i]=e;
+    });
     S.raf=requestAnimationFrame(frame);
   }
 
@@ -8565,13 +8567,13 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
     if(!S) return;
     if(S.phase==='armed'){ finalize(); return; }
     if(S.phase!=='drag') return;
-    var list=rows(), g=geo(list);
-    var t=list[nearest(g.c,S.fy!=null?S.fy:S.pos)];
+    var list=S.list, c=S.g.c;
+    var t=list[nearest(c,(S.fy!=null?S.fy:S.pos)+S.vel*0.06)];
     S.phase='settle'; S.target=t; suppressUntil=Date.now()+450;
     var id=idOf(t);
-    if(t!==S.orig && id && typeof show==='function') show(id,t);     /* 这时才切换内容页，顶部 tab 同步 */
-    S.t=0; frame(0);
-    cancelAnimationFrame(S.raf); S.t=0; S.raf=requestAnimationFrame(frame);
+    if(t!==S.orig && id && typeof show==='function') show(id,t);
+    S.t=0; S.acc=0; frame(0);
+    cancelAnimationFrame(S.raf); S.raf=requestAnimationFrame(frame);
   }
 
   nav.addEventListener('pointerdown',function(e){
