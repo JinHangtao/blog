@@ -3518,6 +3518,7 @@ function moveIndicator(tabEl){
 
   var newLeft=target.offsetLeft;
   var newWidth=target.offsetWidth;
+  var tok=(ind._tok=(ind._tok||0)+1);
 
   // 隨機不規則參數
   var randOffset=(Math.random()-0.5)*newWidth*0.4;
@@ -3534,6 +3535,7 @@ function moveIndicator(tabEl){
 
   // 第二段：移到目標附近，稍微超過
   setTimeout(function(){
+    if(ind._tok!==tok) return;
     var overshoot=(Math.random()-0.5)*6;
     ind.style.transition='transform .22s cubic-bezier(.4,0,.2,1), width .22s cubic-bezier(.4,0,.2,1), opacity .2s, filter .2s';
     ind.style.opacity='0.55';
@@ -3545,11 +3547,13 @@ function moveIndicator(tabEl){
   // 第三段：擴開歸位，清晰變亮，強彈性 overshoot
   // 用 getBoundingClientRect 重新读取，拿到 scale(1.08) transition 完成后的真实视觉尺寸和位置
   setTimeout(function(){
-    var topbar = document.querySelector('.topbar');
-    var tabRect = target.getBoundingClientRect();
-    var topbarRect = topbar.getBoundingClientRect();
-    var visualLeft = tabRect.left - topbarRect.left + topbar.scrollLeft;
-    var visualWidth = tabRect.width;
+    if(ind._tok!==tok) return;
+    // 用 offsetLeft/offsetWidth（布局值，不受换语言淡入时的 translate/blur 动画影响）
+    // 再按 .tab.on 的 scale(1.08) 终态推算视觉位置，避免读到「滑动中途」的坐标
+    var SC=1.08;
+    var w0=target.offsetWidth, l0=target.offsetLeft;
+    var visualWidth=w0*SC;
+    var visualLeft=l0-(visualWidth-w0)/2;
     var ls = parseFloat(getComputedStyle(target).letterSpacing) || 0;
     var centerX = visualLeft + visualWidth * 0.5 - ls * 0.5;
     ind.style.transition='transform .38s cubic-bezier(.34,1.62,.64,1), width .38s cubic-bezier(.34,1.62,.64,1), opacity .28s, filter .28s';
@@ -7924,7 +7928,16 @@ document.addEventListener('click',function(e){
     var seq=(apply._seq=(apply._seq||0)+1);
     function runFor(el){ changes.forEach(function(c){ if(c.el===el) c.fn(); }); }
     function commitAll(){ document.documentElement.setAttribute('data-jh-lang',lang); changes.forEach(function(c){ c.fn(); }); }
-    function realign(){ try{ if(typeof moveIndicator==='function') moveIndicator(document.querySelector('.tab.on')); }catch(e){} }
+    function realign(){ try{
+      var at=document.querySelector('.tab.on'), tb=document.querySelector('.topbar');
+      if(at && tb){
+        var tl=at.offsetLeft, tr=tl+at.offsetWidth, maxL=Math.max(0,tb.scrollWidth-tb.clientWidth), sl=tb.scrollLeft;
+        if(sl>maxL) sl=maxL;
+        if(tl<sl+28) sl=Math.max(0,tl-28); else if(tr>sl+tb.clientWidth-28) sl=Math.min(maxL,tr-tb.clientWidth+28);
+        if(Math.abs(sl-tb.scrollLeft)>0.5) tb.scrollLeft=sl;
+      }
+      if(typeof moveIndicator==='function') moveIndicator(at);
+    }catch(e){} }
     document.documentElement.lang=HTMLLANG[lang]||'zh';
 
     /* 过渡动画（三层叠加）
