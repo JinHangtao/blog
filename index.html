@@ -8257,6 +8257,8 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
 /* 手指拖动切换 tab：只加手势，不改外观 */
 .topbar .tab{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .topbar .tab.on{touch-action:pan-y}
+.topbar.tab-scrubbing .tab{filter:none !important}
+html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;user-select:none !important}
 </style>
 <script id="tab-scrub-js">
 /* ═══ 手指拖动切换 tab · 连续版 ═══
@@ -8264,7 +8266,8 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
    经过相邻两个 tab 时宽度在两者之间平滑变形，快速拖动时会被拉长，带轻微磁吸；
    每个 tab 的金色高亮 / 放大 / 字距按金条的位置连续渐变（软边扫光），没有任何瞬间切换；
    松手后金条带一点回弹落到最近的 tab，此时才真正切换内容页。
-   触发：按在当前高亮 tab 上横向一拖；或在任意 tab 上长按约 0.26 秒再拖。仅触屏/触控笔。 */
+   触发（触屏/触控笔）：按在当前高亮 tab 上横向一拖；或在任意 tab 上长按约 0.26 秒再拖。
+   触发（电脑鼠标）：在任意 tab 上按住左键，横向拖动超过几像素即进入拖动；单击仍是原来的点击切换。 */
 (function(){
   var bar=document.querySelector('.topbar'), ind=document.getElementById('tabIndicator');
   if(!bar||!ind) return;
@@ -8310,6 +8313,7 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
     var list=tabList(), s=S; S=null;
     if(s.phase==='armed'){ clearTimeout(s.timer); return; }
     clearTabs(list);
+    bar.classList.remove('tab-scrubbing'); document.documentElement.classList.remove('tab-scrubbing');
     var t=bar.querySelector('.tab.on')||s.target;     /* 已回到纯 CSS 状态，按真实布局把金条精确落位 */
     if(t){
       var ls=parseFloat(getComputedStyle(t).letterSpacing)||0, vw=t.offsetWidth*(1+SC);
@@ -8383,6 +8387,8 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
     if(!S||S.phase!=='armed') return;
     var list=tabList(), orig=bar.querySelector('.tab.on')||S.tab;
     var other=list.filter(function(t){return t!==orig;})[0]||orig;
+    bar.classList.add('tab-scrubbing'); document.documentElement.classList.add('tab-scrubbing');
+    if(S.mouse){ try{ bar.setPointerCapture(S.pid); }catch(e){} }
     S.phase='drag'; S.orig=orig; S.t=0; S.vel=0; S.sw=0; S.near=null;
     S.on=parseFloat(getComputedStyle(orig).letterSpacing)||0;
     S.base=parseFloat(getComputedStyle(other).letterSpacing)||0;
@@ -8413,19 +8419,25 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
   }
 
   bar.addEventListener('pointerdown',function(e){
-    if(e.pointerType==='mouse'||!e.isPrimary) return;
+    var mouse=(e.pointerType==='mouse');
+    if(!e.isPrimary || (mouse && e.button!==0)) return;
     if(e.target.closest&&e.target.closest('.lang-btn')) return;
     var t=e.target.closest&&e.target.closest('.tab'); if(!t) return;
     if(S) finalize();
-    S={phase:'armed',cx:e.clientX,x0:e.clientX,y0:e.clientY,tab:t,activeStart:t.classList.contains('on'),timer:0,raf:0};
-    S.timer=setTimeout(begin,HOLD);
+    S={phase:'armed',mouse:mouse,pid:e.pointerId,cx:e.clientX,x0:e.clientX,y0:e.clientY,tab:t,activeStart:t.classList.contains('on'),timer:0,raf:0};
+    if(!mouse) S.timer=setTimeout(begin,HOLD);       /* 鼠标不需要长按，拖动超过阈值即开始 */
   },{passive:true});
 
   bar.addEventListener('pointermove',function(e){
-    if(!S||e.pointerType==='mouse') return;
+    if(!S) return;
     S.cx=e.clientX;
     if(S.phase!=='armed') return;
     var dx=Math.abs(e.clientX-S.x0), dy=Math.abs(e.clientY-S.y0);
+    if(S.mouse){
+      if(dx>ACT_SLOP && dx>=dy){ begin(); return; }
+      if(dy>24){ S=null; }
+      return;
+    }
     if(S.activeStart && dx>ACT_SLOP && dx>dy){ clearTimeout(S.timer); begin(); return; }
     if(dx>MOVE_SLOP||dy>MOVE_SLOP){ clearTimeout(S.timer); S=null; }     /* 普通滑动/滚动：放行 */
   },{passive:true});
@@ -8433,6 +8445,8 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
   bar.addEventListener('pointerup',release,{passive:true});
   bar.addEventListener('pointercancel',release,{passive:true});
   bar.addEventListener('touchmove',function(e){ if(S&&S.phase==='drag'&&e.cancelable) e.preventDefault(); },{passive:false});
+  document.addEventListener('selectstart',function(e){ if(S&&S.phase!=='armed') e.preventDefault(); });
+  bar.addEventListener('dragstart',function(e){ if(S) e.preventDefault(); });
   bar.addEventListener('contextmenu',function(e){ if(S&&S.phase!=='armed') e.preventDefault(); });
   bar.addEventListener('click',function(e){
     if(Date.now()<suppressUntil){ e.stopPropagation(); e.preventDefault(); }
