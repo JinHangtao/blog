@@ -8252,5 +8252,106 @@ document.querySelectorAll('a.sb-link[role="button"], a.tab[role="button"]').forE
   a.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); a.click(); } });
 });
 </script>
+
+<style id="tab-scrub-css">
+/* 手指拖动切换 tab：只加手势，不改外观 */
+.topbar .tab{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.topbar .tab.on{touch-action:pan-y}
+</style>
+<script id="tab-scrub-js">
+/* ═══ 手指拖动切换 tab（类似 iOS 分段胶囊：按住拖过去，一路划到最后一个）═══
+   · 手指按在「当前选中的 tab」上，横向一拖就进入拖动模式
+   · 或者在任意 tab 上长按约 0.26 秒，也进入拖动模式（普通点按、横向滑动顶栏完全不受影响）
+   · 拖动时：选中状态和金条实时跟着手指；贴近顶栏左右边缘会自动滚动
+   · 松手后才真正切换内容页（避免划过的每个 tab 都触发一次页面转场）
+   · 仅对触屏/触控笔生效，鼠标行为不变 */
+(function(){
+  var bar=document.querySelector('.topbar'), ind=document.getElementById('tabIndicator');
+  if(!bar||!ind) return;
+  var HOLD=260, MOVE_SLOP=10, ACT_SLOP=6, EDGE=38, st=null, suppressUntil=0;
+
+  function tabList(){ return [].slice.call(bar.querySelectorAll('.tab')); }
+  function idOf(t){ var m=(t.getAttribute('onclick')||'').match(/show\('([^']+)'/); return m?m[1]:null; }
+  function tabAt(x){
+    var l=tabList();
+    for(var i=0;i<l.length;i++){ if(x<l[i].getBoundingClientRect().right) return l[i]; }
+    return l[l.length-1];
+  }
+  /* 金条即时跟随（用布局值计算，和 moveIndicator 终态一致） */
+  function place(t){
+    ind._tok=(ind._tok||0)+1;                       /* 取消 moveIndicator 里尚未执行的分段动画 */
+    var SC=1.08, w0=t.offsetWidth, l0=t.offsetLeft, vw=w0*SC, vl=l0-(vw-w0)/2;
+    var ls=parseFloat(getComputedStyle(t).letterSpacing)||0;
+    var cx=vl+vw*0.5-ls*0.5;
+    ind.style.transition='transform .2s cubic-bezier(.3,.9,.3,1), width .2s cubic-bezier(.3,.9,.3,1), opacity .15s, filter .15s';
+    ind.style.opacity='1'; ind.style.filter='blur(0.5px)';
+    ind.style.width=vw+'px'; ind.style.transform='translateX('+(cx-vw*0.5)+'px)';
+  }
+  function setCur(t){
+    if(!st||st.cur===t) return;
+    tabList().forEach(function(a){ a.classList.remove('on'); });
+    t.classList.add('on'); st.cur=t; place(t);
+    try{ if(navigator.vibrate) navigator.vibrate(6); }catch(e){}
+  }
+  function loop(){
+    if(!st||!st.on) return;
+    var r=bar.getBoundingClientRect(), x=st.x, v=0;
+    if(x<r.left+EDGE) v=-Math.ceil((r.left+EDGE-x)/4);
+    else if(x>r.right-EDGE) v=Math.ceil((x-(r.right-EDGE))/4);
+    if(v) bar.scrollLeft+=Math.max(-14,Math.min(14,v));
+    setCur(tabAt(x));
+    st.raf=requestAnimationFrame(loop);
+  }
+  function begin(){
+    if(!st||st.on) return;
+    st.on=true; st.orig=bar.querySelector('.tab.on'); st.cur=st.orig;
+    try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){}
+    loop();
+  }
+  function end(commit){
+    if(!st) return;
+    clearTimeout(st.timer); cancelAnimationFrame(st.raf);
+    var s=st; st=null;
+    if(!s.on) return;
+    suppressUntil=Date.now()+450;                   /* 松手后浏览器可能补发 click，吞掉 */
+    var t=s.cur, id=t&&idOf(t);
+    if(commit && id && typeof show==='function'){
+      show(id,t);
+      if(typeof moveIndicator==='function') moveIndicator(t);
+      var tl=t.offsetLeft, tr=tl+t.offsetWidth;     /* 最终 tab 确保完整可见 */
+      if(tl<bar.scrollLeft+28) bar.scrollTo({left:Math.max(0,tl-28),behavior:'smooth'});
+      else if(tr>bar.scrollLeft+bar.clientWidth-28) bar.scrollTo({left:tr-bar.clientWidth+28,behavior:'smooth'});
+    }
+  }
+
+  bar.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='mouse'||!e.isPrimary) return;
+    if(e.target.closest&&e.target.closest('.lang-btn')) return;
+    var t=e.target.closest&&e.target.closest('.tab'); if(!t) return;
+    end(false);
+    st={x:e.clientX,x0:e.clientX,y0:e.clientY,tab:t,activeStart:t.classList.contains('on'),on:false,timer:0,raf:0,cur:null,orig:null};
+    st.timer=setTimeout(begin,HOLD);
+  },{passive:true});
+
+  bar.addEventListener('pointermove',function(e){
+    if(!st||e.pointerType==='mouse') return;
+    st.x=e.clientX;
+    if(st.on) return;
+    var dx=Math.abs(e.clientX-st.x0), dy=Math.abs(e.clientY-st.y0);
+    if(st.activeStart && dx>ACT_SLOP && dx>dy){ clearTimeout(st.timer); begin(); return; }
+    if(dx>MOVE_SLOP||dy>MOVE_SLOP){ clearTimeout(st.timer); st=null; }   /* 普通滑动/滚动：放行 */
+  },{passive:true});
+
+  bar.addEventListener('pointerup',function(){ end(true); },{passive:true});
+  bar.addEventListener('pointercancel',function(){ end(true); },{passive:true});
+
+  /* 拖动模式下拦住原生滚动 */
+  bar.addEventListener('touchmove',function(e){ if(st&&st.on&&e.cancelable) e.preventDefault(); },{passive:false});
+  bar.addEventListener('contextmenu',function(e){ if(st&&st.on) e.preventDefault(); });
+  bar.addEventListener('click',function(e){
+    if(Date.now()<suppressUntil){ e.stopPropagation(); e.preventDefault(); }
+  },true);
+})();
+</script>
 </body>
 </html>
