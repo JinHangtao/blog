@@ -8314,13 +8314,15 @@ html.tab-scrubbing, html.tab-scrubbing *{-webkit-user-select:none !important;use
     clearTabs(list);
     bar.classList.remove('tab-scrubbing'); document.documentElement.classList.remove('tab-scrubbing');
     var t=bar.querySelector('.tab.on')||s.target;
-    ind.style.transformOrigin='';
     if(t){                                             /* 切回常规的「宽度 + 平移」表示，几何与拖动末帧完全一致 */
       var ls=parseFloat(getComputedStyle(t).letterSpacing)||0, vw=t.offsetWidth*(1+SC);
       var cx=t.offsetLeft+t.offsetWidth/2-ls/2;
-      ind.style.transition=''; ind.style.opacity='1'; ind.style.filter='blur(0.5px)';
+      ind.style.transition='none';                     /* 关键：切换表示的这一刻必须无过渡，否则样式表里的 .38s 过渡会让金条往右晃一下 */
+      ind.style.transformOrigin=''; ind.style.opacity='1'; ind.style.filter='blur(0.5px)';
       ind.style.width=vw+'px'; ind.style.transform='translateX('+(cx-vw/2)+'px)';
-    }
+      void ind.offsetWidth;                            /* 强制样式落地，再恢复过渡 */
+      ind.style.transition='';
+    } else { ind.style.transformOrigin=''; }
   }
 
   function frame(ts){
