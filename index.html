@@ -517,6 +517,36 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   }
 }
 .sb-av img{width:100%;height:100%;object-fit:cover;pointer-events:none;}
+/* 头像“月相”：一轮深色的月亮从左边慢慢滑过照片；照片随之沉入夜色，最后整个头像是暗的，只剩月亮边缘一条金色细线。
+   月亮只做 transform 位移，边缘一圈极淡的金色细线 + 一层柔和的阴影当作明暗交界线。 */
+.sb-av-away{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.sb-av-away::before{              /* 剩下的那道月牙本身也略微压暗 */
+  content:"";position:absolute;inset:0;background:#100f0d;opacity:0;
+  transition:opacity 1.4s cubic-bezier(.45,0,.2,1);
+}
+.sb-av-moon{
+  position:absolute;left:0;top:50%;width:170px;height:170px;margin-top:-85px;border-radius:50%;
+  background:radial-gradient(circle at 78% 50%,#1a1814 0%,#100f0d 55%,#0b0a09 100%);
+  box-shadow:0 0 0 .5px rgba(214,172,92,.55),0 0 9px 0 rgba(196,154,82,.16),0 0 16px 5px rgba(0,0,0,.5);
+  transform:translate3d(-195px,0,0);
+  transition:transform 1.4s cubic-bezier(.45,0,.2,1);
+  will-change:transform;
+}
+.sb-av.away .sb-av-away::before{opacity:1;transition-duration:2.2s;}
+.sb-av.away .sb-av-moon{transform:translate3d(-74px,0,0);transition-duration:2s;}
+@media(prefers-reduced-motion:reduce){
+  .sb-av-away::before,.sb-av-moon,.sb-av.away .sb-av-away::before,.sb-av.away .sb-av-moon{transition-duration:.01s;}
+}
+/* 点击涟漪时头像边缘短暂泛金 */
+.sb-av.rip-hit{
+  border-color:rgba(196,154,82,.7);
+  box-shadow:inset 0 0 16px rgba(196,154,82,.16);
+  transition:
+    border-radius .55s cubic-bezier(0,0,.18,1),
+    border-color .18s cubic-bezier(.4,0,.2,1),
+    box-shadow .18s cubic-bezier(.4,0,.2,1),
+    transform .12s cubic-bezier(.25,.46,.45,.94);
+}
 .sb-name{
   font-family:'Playfair Display',serif;font-style:italic;font-weight:500;
   font-size:1.12rem;color:var(--cream);letter-spacing:.02em;margin-bottom:0;
@@ -2433,6 +2463,7 @@ html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
   <div class="sb-card sb-top">
   <div class="sb-av">
   <img src="images/頭像呢.jpg" alt="Jin Hangtao" fetchpriority="high" decoding="async">
+  <div class="sb-av-away" aria-hidden="true"><i class="sb-av-moon"></i></div>
 </div>
     <div class="sb-name">Jin Hangtao</div>
   </div>
@@ -5599,6 +5630,41 @@ function triggerStmtPoem(){
   var t=0;
   var _tPrev=performance.now(), _pT=0;
   var _reduceMo=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ── 头像点击 → 星空涟漪 ──
+  // 从头像中心发出一圈波：星星/小行星被推开再弹回，波前经过时略微变亮，附一圈极淡的金色环。
+  // 只在涟漪存在时才有额外计算；全程不用 blur / filter / shadow。
+  var ripples=[], RIP_DUR=2800, RIP_SPEED=600, RIP_W=78, RIP_AMP=15;
+  var _ox=0,_oy=0,_ob=0, _rNow=0;
+  function ripOff(x,y){
+    _ox=0;_oy=0;_ob=0;
+    for(var i=0;i<ripples.length;i++){
+      var rp=ripples[i], age=_rNow-rp.t0; if(age<0||age>RIP_DUR) continue;
+      var dx=x-rp.x, dy=y-rp.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+      var k=(d-age/1000*RIP_SPEED)/RIP_W, g=Math.exp(-k*k); if(g<0.01) continue;
+      var life=1-age/RIP_DUR; life*=life;
+      var fall=1/(1+d/900);
+      var amp=RIP_AMP*g*life*fall;
+      _ox+=dx/d*amp; _oy+=dy/d*amp; _ob+=g*life*fall;
+    }
+  }
+  function addRipple(){
+    if(_reduceMo) return;
+    var av=document.querySelector('.sb-av'); if(!av) return;
+    var r=av.getBoundingClientRect(); if(!r.width) return;
+    var cr=c.getBoundingClientRect(), sx=W/cr.width, sy=H/cr.height;
+    ripples.push({x:(r.left+r.width/2-cr.left)*sx, y:(r.top+r.height/2-cr.top)*sy, t0:performance.now()});
+    if(ripples.length>3) ripples.shift();
+  }
+  (function(){
+    var av=document.querySelector('.sb-av'); if(!av) return;
+    var hitT=0;
+    av.addEventListener('click',function(){
+      addRipple();
+      av.classList.add('rip-hit'); clearTimeout(hitT);
+      hitT=setTimeout(function(){ av.classList.remove('rip-hit'); },700);
+    });
+  })();
   function draw(){
     requestAnimationFrame(draw);
     if(window._lbOpen||window._lbFlying||window.__perfSkipCanvas) return;
@@ -5610,6 +5676,8 @@ function triggerStmtPoem(){
     var _pk=Math.max(0,Math.min(1,(_pT-450)/1300)); _pk=_pk*_pk*(3-2*_pk);
     if(_reduceMo) _pk=1;
     ctx.clearRect(0,0,W,H);
+    _rNow=_now;
+    if(ripples.length){ ripples=ripples.filter(function(rp){ return _rNow-rp.t0<RIP_DUR; }); }
 
     // ── 星星 ──
     stars.forEach(function(s){
@@ -5618,7 +5686,11 @@ function triggerStmtPoem(){
       if(s.y<0)s.y=1;if(s.y>1)s.y=0;
       var fl=0.72+0.28*Math.sin(t*s.sp*65+s.ph);
       var a=s.base*fl;
-      var px=s.x*W, py=s.y*H;
+      var px=s.x*W, py=s.y*H, rk=1;
+      if(ripples.length){
+        ripOff(px,py);
+        if(_ob){ px+=_ox; py+=_oy; a=Math.min(0.95,a+_ob*0.55); rk=1+_ob*0.7; }
+      }
       if(s.big){
         var R=s.r*4;
         ctx.globalAlpha=a;                       // 光晕 alpha 与 a 成正比 → 用 globalAlpha 调制预渲染的精灵
@@ -5631,7 +5703,7 @@ function triggerStmtPoem(){
         ctx.beginPath();ctx.moveTo(px,py-len);ctx.lineTo(px,py+len);ctx.stroke();
         ctx.restore();
       }
-      ctx.beginPath();ctx.arc(px,py,s.r,0,Math.PI*2);
+      ctx.beginPath();ctx.arc(px,py,s.r*rk,0,Math.PI*2);
       ctx.fillStyle='rgba(255,248,215,'+Math.min(a,0.75)+')';
       ctx.fill();
     });
@@ -5642,6 +5714,7 @@ function triggerStmtPoem(){
       if(a.x<0)a.x=1;if(a.x>1)a.x=0;
       if(a.y<0)a.y=1;if(a.y>1)a.y=0;
       var ax=a.x*W, ay=a.y*H, s=a.size;
+      if(ripples.length){ ripOff(ax,ay); ax+=_ox; ay+=_oy; }
       var c=a.col;
       ctx.save();
       ctx.translate(ax,ay);ctx.rotate(a.rot);
@@ -5664,6 +5737,18 @@ function triggerStmtPoem(){
       ctx.drawImage(planetCv,0,0);
       ctx.translate(pgeo.px,pgeo.py); ctx.rotate(pl.rRot*0.35);
       ctx.drawImage(ringCv,-ringHalf,-ringHalf);
+      ctx.restore();
+    }
+    // ── 涟漪光环：一粗一细两道描边，随扩散淡出 ──
+    if(ripples.length){
+      ctx.save();
+      ripples.forEach(function(rp){
+        var age=_rNow-rp.t0, life=1-age/RIP_DUR; if(life<=0) return;
+        var R=age/1000*RIP_SPEED, al=life*life;
+        ctx.beginPath(); ctx.arc(rp.x,rp.y,R,0,Math.PI*2);
+        ctx.strokeStyle='rgba(196,154,82,'+(0.05*al).toFixed(4)+')'; ctx.lineWidth=14; ctx.stroke();
+        ctx.strokeStyle='rgba(222,186,118,'+(0.20*al).toFixed(4)+')'; ctx.lineWidth=1; ctx.stroke();
+      });
       ctx.restore();
     }
     if(__p0){var __d=performance.now()-__p0;window.__perf.canvasMs=__d;if(__d>window.__perf.maxCanvas)window.__perf.maxCanvas=__d;}
@@ -5931,6 +6016,57 @@ window.applyBlogCollapse = function(root){
     av.classList.add('tap-round');
     setTimeout(function(){ av.classList.remove('tap-round'); }, 650);
   }, {passive:true});
+})();
+
+// ══ AVATAR DIM：头像自己慢慢“转暗”，不再一直盯着访客 ══
+(function(){
+  var av=document.querySelector('.sb-av'); if(!av) return;
+  var reduce=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var canHover=window.matchMedia && matchMedia('(hover:hover)').matches;
+  var IDLE_MIN=25000, IDLE_RNG=15000, NEAR=110, FAR=170;
+  var timer=0, mx=-1e4, my=-1e4, needLeave=false;
+
+  function visible(){ return av.offsetParent!==null && !document.hidden; }
+  function dist(){
+    var r=av.getBoundingClientRect(), dx=mx-(r.left+r.width/2), dy=my-(r.top+r.height/2);
+    return Math.sqrt(dx*dx+dy*dy);
+  }
+  function dimmed(){ return av.classList.contains('away'); }
+  function arm(){
+    clearTimeout(timer);
+    if(reduce||!visible()) return;
+    timer=setTimeout(autoDim, IDLE_MIN+Math.random()*IDLE_RNG);
+  }
+  function autoDim(){
+    if(!visible()||dimmed()||window._lbOpen) { arm(); return; }
+    if(canHover && dist()<FAR){ arm(); return; }     // 鼠标还在头像附近就别暗
+    av.classList.add('away');
+  }
+  function wake(){ if(dimmed()){ av.classList.remove('away'); } arm(); }
+
+  // 有操作就重新计时；没有鼠标的设备上，任何操作都会唤醒
+  function activity(){ if(dimmed()){ if(!canHover) wake(); } else arm(); }
+  ['scroll','wheel','keydown','pointerdown','touchstart'].forEach(function(ev){
+    window.addEventListener(ev,activity,{passive:true,capture:true});
+  });
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) clearTimeout(timer); else arm(); });
+
+  // 鼠标靠近 → 慢慢亮回来（手动转暗后，要先离开再靠近才会亮）
+  window.addEventListener('mousemove',function(e){
+    mx=e.clientX; my=e.clientY;
+    if(!dimmed()) return;
+    var d=dist();
+    if(needLeave){ if(d>FAR) needLeave=false; return; }
+    if(d<NEAR) wake();
+  },{passive:true});
+
+  // 点击：手动切换（涟漪由星空那段代码负责）
+  av.addEventListener('click',function(){
+    if(dimmed()){ wake(); }
+    else { av.classList.add('away'); needLeave=true; clearTimeout(timer); }
+  });
+
+  arm();
 })();
 
 // ══ PAGE REVEAL ══
