@@ -374,7 +374,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   }
   .reveal-ready .sb-av{
     animation:
-      avReveal .9s cubic-bezier(0,0,.18,1) .08s backwards,
       avPopScale 1.3s var(--spring-pop) .06s backwards,
       avPopFade .5s var(--ease-out) .06s backwards;
   }
@@ -417,14 +416,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   will-change:auto;
 }
 
-/* 头像入场：圆润 → 正常 */
+/* 头像入场：圆润 → 正常。
+   不再用 keyframes 动画控制圆角：动画会盖住悬停的圆角，动画一结束就会“啪”地跳过去。
+   改成 transition：入场时先是 32px（无过渡），av-in 加上后过渡到正常值；
+   入场途中鼠标悬停，浏览器会从当前值平滑改向 26px，没有跳变。 */
+.reveal-ready:not(.av-in) .sb-av{border-radius:32px;transition:none;}
+html:not(.intro-done) .sb-av{transition-duration:.9s,.38s,.12s;}
+@media(prefers-reduced-motion:reduce){ html:not(.intro-done) .sb-av{transition-duration:.2s,.2s,.01s;} }
 @keyframes avReveal{
   from{ border-radius: 32px; }
   to{   border-radius: 13px; }
 }
 .reveal-ready .sb-av{
   animation:
-    avReveal .9s cubic-bezier(0,0,.18,1) .08s backwards,
     avPopScale 1.3s var(--spring-pop) .06s backwards,
     avPopFade .5s var(--ease-out) .06s backwards,
     avPopBlur .7s var(--ease-out) .06s backwards;
@@ -526,21 +530,25 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
 }
 .sb-av-moon{
   position:absolute;left:0;top:50%;width:170px;height:170px;margin-top:-85px;border-radius:50%;
-  background:radial-gradient(circle at 78% 50%,#1a1814 0%,#100f0d 55%,#0b0a09 100%);
-  box-shadow:0 0 0 .5px rgba(214,172,92,.55),0 0 9px 0 rgba(196,154,82,.16),0 0 16px 5px rgba(0,0,0,.5);
+  /* 没有描边：边缘是一圈向内渐隐的暗金色，边界本身也是渐变，所以没有锯齿 */
+  background:radial-gradient(closest-side,
+    #141310 0%,#131210 86%,
+    rgba(120,94,52,.30) 94.5%,rgba(120,94,52,.10) 97.5%,rgba(16,15,13,0) 100%);
+  box-shadow:0 0 18px 6px rgba(0,0,0,.42);
   transform:translate3d(-195px,0,0);
   transition:transform 1.4s cubic-bezier(.45,0,.2,1);
   will-change:transform;
 }
 .sb-av.away .sb-av-away::before{opacity:1;transition-duration:2.2s;}
 .sb-av.away .sb-av-moon{transform:translate3d(-74px,0,0);transition-duration:2s;}
+.sb-av.away{border-color:rgba(48,45,41,.5);}
 @media(prefers-reduced-motion:reduce){
   .sb-av-away::before,.sb-av-moon,.sb-av.away .sb-av-away::before,.sb-av.away .sb-av-moon{transition-duration:.01s;}
 }
 /* 点击涟漪时头像边缘短暂泛金 */
 .sb-av.rip-hit{
-  border-color:rgba(196,154,82,.7);
-  box-shadow:inset 0 0 16px rgba(196,154,82,.16);
+  border-color:rgba(196,154,82,.3);
+  box-shadow:inset 0 0 14px rgba(196,154,82,.10);
   transition:
     border-radius .55s cubic-bezier(0,0,.18,1),
     border-color .18s cubic-bezier(.4,0,.2,1),
@@ -5632,7 +5640,7 @@ function triggerStmtPoem(){
   var _reduceMo=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ── 头像点击 → 星空涟漪 ──
-  // 从头像中心发出一圈波：星星/小行星被推开再弹回，波前经过时略微变亮，附一圈极淡的金色环。
+  // 从头像中心发出一圈波：星星/小行星被推开再弹回，波前经过时略微变亮。不画任何线。
   // 只在涟漪存在时才有额外计算；全程不用 blur / filter / shadow。
   var ripples=[], RIP_DUR=2800, RIP_SPEED=600, RIP_W=78, RIP_AMP=15;
   var _ox=0,_oy=0,_ob=0, _rNow=0;
@@ -5737,18 +5745,6 @@ function triggerStmtPoem(){
       ctx.drawImage(planetCv,0,0);
       ctx.translate(pgeo.px,pgeo.py); ctx.rotate(pl.rRot*0.35);
       ctx.drawImage(ringCv,-ringHalf,-ringHalf);
-      ctx.restore();
-    }
-    // ── 涟漪光环：一粗一细两道描边，随扩散淡出 ──
-    if(ripples.length){
-      ctx.save();
-      ripples.forEach(function(rp){
-        var age=_rNow-rp.t0, life=1-age/RIP_DUR; if(life<=0) return;
-        var R=age/1000*RIP_SPEED, al=life*life;
-        ctx.beginPath(); ctx.arc(rp.x,rp.y,R,0,Math.PI*2);
-        ctx.strokeStyle='rgba(196,154,82,'+(0.05*al).toFixed(4)+')'; ctx.lineWidth=14; ctx.stroke();
-        ctx.strokeStyle='rgba(222,186,118,'+(0.20*al).toFixed(4)+')'; ctx.lineWidth=1; ctx.stroke();
-      });
       ctx.restore();
     }
     if(__p0){var __d=performance.now()-__p0;window.__perf.canvasMs=__d;if(__d>window.__perf.maxCanvas)window.__perf.maxCanvas=__d;}
@@ -6072,6 +6068,8 @@ window.applyBlogCollapse = function(root){
 // ══ PAGE REVEAL ══
 (function(){
   document.documentElement.classList.add('reveal-ready');
+  // 头像圆角入场：先落在 32px，约 80ms 后放行过渡，圆角从 32px 缓缓收到正常值
+  setTimeout(function(){ void document.documentElement.offsetWidth; document.documentElement.classList.add('av-in'); }, 80);
 
   // stagger 错开：侧边栏 0ms，主区域 120ms，about 内容 220ms 起每隔 55ms
   var items = Array.prototype.slice.call(document.querySelectorAll('#p-about .ph-reveal'));
