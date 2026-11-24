@@ -530,20 +530,27 @@ html:not(.intro-done) .sb-av{transition-duration:.9s,.38s,.12s;}
 }
 .sb-av-moon{
   position:absolute;left:0;top:50%;width:170px;height:170px;margin-top:-85px;border-radius:50%;
-  /* 没有描边：边缘是一圈向内渐隐的暗金色，边界本身也是渐变，所以没有锯齿 */
-  background:radial-gradient(closest-side,
-    #141310 0%,#131210 86%,
-    rgba(120,94,52,.30) 94.5%,rgba(120,94,52,.10) 97.5%,rgba(16,15,13,0) 100%);
+  /* 月亮本体：边缘是一圈约 10px 的暗色羽化，没有任何亮色，移动时不会出现线或锯齿 */
+  background:radial-gradient(closest-side,#141310 0%,#131210 88%,rgba(19,18,16,0) 100%);
   box-shadow:0 0 18px 6px rgba(0,0,0,.42);
   transform:translate3d(-195px,0,0);
   transition:transform 1.4s cubic-bezier(.45,0,.2,1);
   will-change:transform;
 }
+/* 暗金色的微光：只在月亮完全停稳后才缓缓浮现；一旦要退回去，先于月亮一步淡掉 */
+.sb-av-moon::after{
+  content:"";position:absolute;inset:0;border-radius:50%;opacity:0;
+  background:radial-gradient(closest-side,rgba(120,94,52,0) 0%,rgba(120,94,52,0) 87%,
+    rgba(120,94,52,.13) 95%,rgba(120,94,52,0) 100%);
+  transition:opacity .25s ease;
+}
+.sb-av.away .sb-av-moon::after{opacity:1;transition:opacity 1.6s ease 1.5s;}
 .sb-av.away .sb-av-away::before{opacity:1;transition-duration:2.2s;}
 .sb-av.away .sb-av-moon{transform:translate3d(-74px,0,0);transition-duration:2s;}
 .sb-av.away{border-color:rgba(48,45,41,.5);}
 @media(prefers-reduced-motion:reduce){
   .sb-av-away::before,.sb-av-moon,.sb-av.away .sb-av-away::before,.sb-av.away .sb-av-moon{transition-duration:.01s;}
+  .sb-av-moon::after,.sb-av.away .sb-av-moon::after{transition-duration:.01s;transition-delay:0s;}
 }
 /* 点击涟漪时头像边缘短暂泛金 */
 .sb-av.rip-hit{
