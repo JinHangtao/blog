@@ -485,7 +485,7 @@ html:not(.intro-done) .sb-av{transition-duration:.9s,.38s,.12s;}
 }
 .sb-av{
   width:105px;height:100px;border-radius:13px;
-  background:var(--card2);border:1px solid var(--line2);
+  background:var(--card2);border:0;
   display:flex;align-items:center;justify-content:center;
   margin-bottom:12px;font-family:'Playfair Display',serif;
   font-style:italic;font-size:2rem;color:var(--gold);
@@ -520,8 +520,11 @@ html:not(.intro-done) .sb-av{transition-duration:.9s,.38s,.12s;}
       border-color .38s cubic-bezier(.4,0,.2,1);
   }
 }
-.sb-av img{width:100%;height:100%;object-fit:cover;pointer-events:none;}
-/* 头像“月相”：一轮深色的月亮从左边慢慢滑过照片；照片随之沉入夜色，最后整个头像是暗的，只剩月亮边缘一条金色细线。
+/* 照片比头像框四周各内缩 1px,圆角跟随头像(包括悬停时变大的圆角)。
+   这样照片自己的抗锯齿边缘永远藏在盖住它的月亮/暗层里面,
+   点击变暗的 2 秒里,左上角那个“点”就不会再漏出来。内缩的 1px 正好是淡边线的位置,看不出差别。 */
+.sb-av img{width:calc(100% - 2px);height:calc(100% - 2px);margin:1px;border-radius:inherit;object-fit:cover;pointer-events:none;}
+/* 头像“月相”：一轮深色的月亮从左边慢慢滑过并完整盖住照片，头像沉入夜色；外框线同时淡去。
    月亮只做 transform 位移，边缘一圈极淡的金色细线 + 一层柔和的阴影当作明暗交界线。 */
 .sb-av-away{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
 .sb-av-away::before{              /* 剩下的那道月牙本身也略微压暗 */
@@ -537,21 +540,42 @@ html:not(.intro-done) .sb-av{transition-duration:.9s,.38s,.12s;}
   transition:transform 1.4s cubic-bezier(.45,0,.2,1);
   will-change:transform;
 }
-/* 暗金色的微光：只在月亮完全停稳后才缓缓浮现；一旦要退回去，先于月亮一步淡掉 */
-.sb-av-moon::after{
-  content:"";position:absolute;inset:0;border-radius:50%;opacity:0;
-  background:radial-gradient(closest-side,rgba(120,94,52,0) 0%,rgba(120,94,52,0) 87%,
-    rgba(120,94,52,.13) 95%,rgba(120,94,52,0) 100%);
-  transition:opacity .25s ease;
-}
-.sb-av.away .sb-av-moon::after{opacity:1;transition:opacity 1.6s ease 1.5s;}
 .sb-av.away .sb-av-away::before{opacity:1;transition-duration:2.2s;}
-.sb-av.away .sb-av-moon{transform:translate3d(-74px,0,0);transition-duration:2s;}
-.sb-av.away{border-color:rgba(48,45,41,.5);}
+.sb-av.away .sb-av-moon{transform:translate3d(-32px,0,0);transition-duration:2s;}
+.sb-av.away{
+  /* 暗下来后外框的那圈 1px 边线也一起消失：边框透明，且底色不再画到边框下面 */
+  border-color:transparent;background-clip:padding-box;
+  background-color:#100f0d;
+  transition:
+    border-radius .55s cubic-bezier(0,0,.18,1),
+    border-color 2s cubic-bezier(.45,0,.2,1),
+    background-color 2s cubic-bezier(.45,0,.2,1),
+    transform .12s cubic-bezier(.25,.46,.45,.94);
+}
+
+/* ── 头像边缘线:极淡的柔边,不再用 1px 实线边框 ──
+   用内阴影画一圈,圆角处的抗锯齿比 border 平滑;盖住(away)时整圈淡出。 */
+.sb-av::after{
+  content:"";position:absolute;inset:0;z-index:4;pointer-events:none;
+  border-radius:inherit;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.045);
+  transition:box-shadow .38s cubic-bezier(.4,0,.2,1), opacity 2s cubic-bezier(.45,0,.2,1);
+}
+@media(hover:hover){ .sb-av:hover::after{ box-shadow:inset 0 0 0 1px rgba(196,154,82,.2); } }
+@media(hover:none){ .sb-av:active::after,.sb-av.tap-round::after{ box-shadow:inset 0 0 0 1px rgba(196,154,82,.2); } }
+.sb-av.rip-hit::after{ box-shadow:inset 0 0 0 1px rgba(196,154,82,.22); }
+.sb-av.pi-load::after{ opacity:0; }
+.sb-av.away::after{ opacity:0; }
+
+/* 修复:被月亮盖住后,照片在圆角抗锯齿像素处会漏出一圈亮边。
+   等月亮完全盖住(2.2s)后再把照片隐藏;唤醒时立刻恢复。
+   用 animation 而不是 transition:照片上的 .pi 淡入规则带 !important,会盖住 transition。 */
+@keyframes avImgHide{ to{ visibility:hidden; } }
+.sb-av.away img{ animation:avImgHide 0s linear 2.2s forwards; }
 @media(prefers-reduced-motion:reduce){
   .sb-av-away::before,.sb-av-moon,.sb-av.away .sb-av-away::before,.sb-av.away .sb-av-moon{transition-duration:.01s;}
-  .sb-av-moon::after,.sb-av.away .sb-av-moon::after{transition-duration:.01s;transition-delay:0s;}
 }
+@media(prefers-reduced-motion:reduce){ .sb-av.away img{ animation-delay:.02s; } .sb-av::after{ transition-duration:.01s; } }
 /* 点击涟漪时头像边缘短暂泛金 */
 .sb-av.rip-hit{
   border-color:rgba(196,154,82,.3);
