@@ -736,8 +736,10 @@ html:not(.intro-done) .sb-av{transition-duration:.9s,.38s,.12s;}
              transform .28s cubic-bezier(.4,0,.2,1),
              filter .22s cubic-bezier(.4,0,.2,1);
 }
-.tab:hover{
-  filter:brightness(1.55);
+@media (hover:hover) and (pointer:fine){
+  .tab:hover{
+    filter:brightness(1.55);
+  }
 }
 .tab:focus{outline:none;}
 .tab:focus:not(.on){background-position:100% 0;filter:none;}
@@ -2421,6 +2423,23 @@ html[data-jh-lang="zh"] .tab.on{letter-spacing:.16em}
 html[data-jh-lang="zh"] .sb-link-txt{font-size:.88rem;letter-spacing:.14em}
 @media(max-width:768px){
   html[data-jh-lang="zh"] .tab{font-size:.8rem;letter-spacing:.1em;padding:13px 14px}
+}
+/* 手机端修复：点击 tab 后标题变白 + 背后出现白色托底 */
+@media (hover:none),(pointer:coarse){
+  .topbar .tab,.topbar .tab:hover,.topbar .tab:active,.topbar .tab:focus,.topbar .tab.on{
+    filter:none !important;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-text-fill-color:transparent;
+    background-color:transparent !important;
+    box-shadow:none;
+    outline:none;
+  }
+  .topbar .tab{
+    will-change:auto;
+    backface-visibility:visible;-webkit-backface-visibility:visible;
+    transform:none;
+  }
+  .topbar .tab.on{ transform:scale(1.08); }
 }
 </style>
 <style id="modern-panels">
